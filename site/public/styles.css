@@ -21,6 +21,7 @@
   --horse-height: 60px;
   --sprite-scale: 2;
   --label-col: 124px;
+  --label-mid: 23%;  /* vertical centre of the name-tag — aligned with the horse's middle */
   --ticker-h: 2.6rem;
   --error: #ff6b6b;
   --error-wash: rgba(255, 107, 107, 0.1);
@@ -402,20 +403,16 @@ html, body {
   position: relative;
   pointer-events: none;
 }
-/* Bordered chip filling its lane's full height, so the column of tags reads as
-   one row per lane. It used to be a content-height chip centred on the horse's
-   middle (which sits above the lane's centre line, since the horse stands with
-   its feet there) — that left every tag straddling the boundary between two
-   lanes, and on any theme with a visible lane edge it read as misalignment. */
+/* Bordered chip, vertically aligned with the horse's middle (not the lane
+   centre line), giving each lane a distinct edge. */
 .lane-info-box {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: var(--label-mid);
   left: 4px;
   right: 6px;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 0;
   padding: 1px 6px;
   background: var(--label-box); /* slightly lifted off the page's pure black */
@@ -2452,10 +2449,12 @@ label.label input:disabled, label.label select:disabled, label.label textarea:di
   --city-h: 124px;
   /* The pavement line: the top of the parapet, which is also what the bus runs
      along. Anything standing on the bridge shares it. */
-  --bridge-deck: calc(var(--city-ground) + var(--city-h) * 26 / 124);
-  /* About two thirds the bus's height. A K6 is really half a double-decker, but
-     at this size the honest ratio is five pixels of red and nothing readable. */
-  --phonebox-h: calc(var(--city-h) * 21 / 124);
+  --bridge-deck: calc(var(--city-ground) + var(--city-h) * 20 / 124);
+  /* A K6 is really half a double-decker's height, and drawn to that ratio it was
+     small enough to miss entirely. Pushed up to about three quarters of the bus
+     — still visibly the shorter of the two, but actually legible as a phone
+     box rather than a red mark on the pavement. */
+  --phonebox-h: calc(var(--city-h) * 34 / 124);
   background-image:
     url('img/london-bridge.svg'),
     url('img/london-phonebox.svg'),
@@ -2506,8 +2505,8 @@ label.label input:disabled, label.label select:disabled, label.label textarea:di
   /* Same six layers as the crowd strip, one ticker-height up so the roadway
      runs along the top of the ticker rather than having its feet cut off. */
   --city-h: 190px;
-  --bridge-deck: calc(var(--ticker-h) + var(--city-h) * 26 / 124);
-  --phonebox-h: calc(var(--city-h) * 21 / 124);
+  --bridge-deck: calc(var(--ticker-h) + var(--city-h) * 20 / 124);
+  --phonebox-h: calc(var(--city-h) * 34 / 124);
   background-image:
     url('img/london-bridge.svg'),
     url('img/london-phonebox.svg'),
