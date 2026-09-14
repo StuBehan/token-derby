@@ -113,6 +113,28 @@ describe('theme id duplication', () => {
     expect(unused).toEqual([]);
   });
 
+  // Theme art is committed rather than built (see scripts/gen-london-skyline.mjs),
+  // so a renamed or unregenerated asset fails silently as a blank background.
+  it('every image referenced by the stylesheet exists', () => {
+    const css = read('../public/styles.css');
+    const refs = [...new Set([...css.matchAll(/url\('(img\/[^']+)'\)/g)].map((m) => m[1]!))];
+    expect(refs.length).toBeGreaterThan(0);
+    // Resolved through the same `read` the tests above use. A literal
+    // `new URL('…', import.meta.url)` does NOT work here: happy-dom replaces the
+    // global URL with one that resolves relative paths against
+    // http://localhost:3000/, and only the indirection through `read`'s
+    // parameter survives Vite's transform with a file: URL.
+    const missing = refs.filter((ref) => {
+      try {
+        read(`../public/${ref}`);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    expect(missing).toEqual([]);
+  });
+
   it('the pre-paint script in index.html lists exactly the registered ids', () => {
     const html = read('../public/index.html');
     expect(html).toContain(`localStorage.getItem('${THEME_STORAGE_KEY}')`);

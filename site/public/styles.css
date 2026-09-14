@@ -2246,6 +2246,326 @@ label.label input:disabled, label.label select:disabled, label.label textarea:di
   --ticker-accent: #e5e5e5;
 }
 
+/* ── London ─────────────────────────────────────────────
+   A wet night on the Underground. The palette is the Tube map's own: Johnston
+   blue in the lanes, roundel red as the accent, Circle yellow on the ticker,
+   District green for LIVE — four strong hues that only work together because
+   everything holding them is slate.
+
+   Kept clear of Midnight, the other blue theme: Midnight is a muted steel blue
+   under a cyan accent, this is a saturated indigo under red, so the two never
+   read as variants in the picker. */
+:root[data-theme="london"] {
+  --bg: #0b0f14;
+  --panel: #151c25;
+  --text: #e6ecf2;
+  --muted: #8794a5;
+  /* Roundel red, lifted off #E32017 — the true red lands at 3.8:1 on --panel,
+     and --accent is text on selected tabs, not just a border colour. */
+  --accent: #ff4b3e;
+  --border: #2a3441;
+  /* Asphalt at night: near-neutral, only a breath of blue in it. The rest of
+     the theme is slate, and a road that picks up the same slate reads as
+     painted metal rather than tarmac.
+
+     This is the one theme whose lanes are not the dirt sprite re-tinted (see
+     the .lane-track override below), so --lane is the surface colour outright
+     rather than a hue for `luminosity` to push into the sprite — which is also
+     why --track-blend and --track-shade are absent here. */
+  --lane: #24262b;
+  --rail: #f2f6fa;
+  --label-box: #121922;
+  --live: #4ad991;
+  --ticker-accent: #ffd300;
+}
+
+/* They are racing up a road, so the track is a road: the dirt sprite goes
+   entirely — asphalt has no grain worth drawing at this size — and the lanes
+   are divided by dashed markings instead of by the sprite's kerb bands. The
+   square corners go with it; roads do not have rounded ends. */
+:root[data-theme="london"] .lane-track {
+  background: var(--lane);
+  border-radius: 0;
+}
+/* A marking divides one lane from the one above it, so the first lane has none
+   — there is nothing above it to be divided from. Long dash, longer gap, which
+   is how road markings are actually spaced and what keeps them from reading as
+   a dotted rule. */
+:root[data-theme="london"] .lane + .lane .lane-track {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--rail) 0 34px,
+    transparent 34px 62px
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 3px;
+  background-position: left top;
+}
+
+/* Victorian lamps down both kerbs. Hung off the first and last lanes rather
+   than off .track, which stretches to fill whatever height is left over and
+   would have stood them well below the road.
+
+   Both rows are absolutely positioned so they paint over their neighbours:
+   z-index 2 clears the z-index 1 the horses carry and the z-index 0 stacking
+   context the crowd strip sits in. `left` matches .lane-info's flex basis, so
+   they start exactly where the road does and never cross the name plates. */
+:root[data-theme="london"] .lane:last-child { position: relative; }
+
+/* Far kerb: hung off the bottom of the crowd strip, which puts the bases on the
+   boundary between the grandstand and the road. It cannot hang off the first
+   lane instead — .track carries `overflow: auto` so it can scroll a long field,
+   and anything reaching above the first lane is clipped at the road's edge.
+   Being a positioned pseudo-element, it paints over the crowd sprites, which is
+   right: this row stands in front of the grandstand, not among it.
+
+   Shorter than the near row because it is further away, and offset half a span
+   so the two rows never line up into columns. */
+:root[data-theme="london"] .crowd::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 92px;
+  pointer-events: none;
+  background: url('img/london-lamp.svg') repeat-x 96px bottom / auto 92px;
+}
+
+/* Near kerb: bases below the last lane, so the posts rise across the lower
+   lanes. A horse passing behind a post is the depth cue that sells the street. */
+:root[data-theme="london"] .lane:last-child::after {
+  content: '';
+  position: absolute;
+  left: var(--label-col);
+  right: 0;
+  bottom: -18px;
+  height: 116px;
+  z-index: 2;
+  pointer-events: none;
+  background: url('img/london-lamp.svg') repeat-x left bottom / auto 116px;
+}
+
+/* Fog, in front of the page rather than behind it — fog is the thing that comes
+   between you and what you are looking at, so a backdrop layer (Matrix's trick)
+   would be the wrong way round. That puts it over live text, so the banks peak
+   at 0.10 alpha: enough to read as weather drifting past, not enough to move
+   any foreground pair off its contrast ratio. z-index 2 matches the scanlines;
+   no theme wears both.
+
+   One element, not three: the banks are three gradients in one tile, so the
+   whole thing is a single composited layer moved by `transform` — the same
+   performance rule the Matrix backdrop is built on. Tiled at exactly 100vw and
+   drifting exactly 100vw, so the loop has no seam. */
+:root[data-theme="london"] body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 200vw;
+  z-index: 2;
+  pointer-events: none;
+  /* Every bank fades out well inside its own 100vw tile (centre ± 0.7 × the
+     horizontal radius, the point the stop reaches zero alpha). A bank that
+     overruns is clipped at the tile edge instead of bleeding into the next
+     one, which puts a hard vertical seam down the page as the layer drifts.
+     The ~2vw of clear air left either side of the tile is the seam, and clear
+     air has no edge to see. Stops fade to an alpha-0 *grey* rather than
+     `transparent`, which is alpha-0 black and greys the falloff. */
+  background:
+    radial-gradient(34vw 40vh at 25vw 78vh, rgba(197, 214, 232, 0.13), rgba(197, 214, 232, 0) 70%),
+    radial-gradient(30vw 32vh at 58vw 46vh, rgba(186, 205, 226, 0.09), rgba(186, 205, 226, 0) 70%),
+    radial-gradient(24vw 30vh at 82vw 92vh, rgba(205, 219, 234, 0.12), rgba(205, 219, 234, 0) 70%);
+  background-size: 100vw 100%;
+  background-repeat: repeat-x;
+}
+/* Slow enough that you never catch it moving — you just notice the page looks
+   different than it did a minute ago. */
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="london"] body::before {
+    animation: london-fog-drift 90s linear infinite;
+  }
+}
+@keyframes london-fog-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100vw); }
+}
+/* Same rule the crowd and the chromatic wash follow — the page stops moving
+   once the race is over. The fog itself stays; only the drift halts. */
+:root[data-theme="london"]:has(.race.finished) body::before {
+  animation-play-state: paused;
+}
+
+/* ── The city ───────────────────────────────────────────
+   Two mountings for one piece of art, because the race view and everything
+   else have opposite problems.
+
+   On the race view it goes in a strip of sky opened up above the crowd, so it
+   is behind the grandstand and ALWAYS on screen. The obvious mounting — a
+   fixed layer at the foot of the page, the way Matrix hangs its rain — only
+   works while the field is short enough to leave the bottom of the page empty;
+   a full field covers it completely, which is exactly when a theme most needs
+   to still look like itself. The strip costs the track about two lanes of
+   height, and the track already scrolls when a field outgrows it.
+
+   Everywhere else (home, the org pages) there is no crowd to sit behind, so
+   the same art hangs along the bottom of the viewport instead. The two are
+   mutually exclusive by construction: one requires a .crowd on the page, the
+   other requires there not to be one.
+
+   Both draw the landmarks ONCE, centred — the whole point of them is that they
+   are Tower Bridge and Big Ben, and a tiled skyline would put two Big Bens on
+   screen at laptop width — with the generic rooftops tiling out from behind
+   them to both edges, so the city runs off the screen rather than ending in
+   mid-air where the centrepiece stops. */
+
+:root[data-theme="london"] .crowd {
+  /* The sky strip. Sprites are pinned to the bottom of the taller box and given
+     back their own height, since .crowd-person's `height: 100%` would otherwise
+     stretch one 32px sprite over the whole strip. */
+  height: calc(var(--sprite-scale) * 32px + var(--city-h));
+  align-items: flex-end;
+  /* z-index (not just position) so this is a stacking context of its own, which
+     is what lets the bus below sit at z-index -1: inside a stacking context a
+     negative-z child paints above the element's own background — the skyline —
+     but below its in-flow children, the crowd sprites. Without it the bus would
+     drop out to the page's stacking context and vanish behind the skyline. */
+  position: relative;
+  z-index: 0;
+  /* Layers, front to back: the bridge you are standing on (its parapet, lamps
+     and phone boxes are one tile — see gen-london-skyline.mjs for why), haze,
+     the city downriver, generic rooftops.
+
+     The haze sits BELOW the bridge and above the distant city, which is what
+     separates the two: the bridge is where you are standing and stays crisp,
+     the city is a mile downriver and goes soft.
+
+     Everything shares one ground line, sat a little way INTO the crowd rather
+     than resting on top of it, so the roadway disappears behind the grandstand
+     instead of balancing on it. */
+  --city-ground: calc(var(--sprite-scale) * 32px - 10px);
+  /* Every layer is sized off this one number, so the narrow-screen rules below
+     only have to change --city-h. */
+  --city-h: 124px;
+  /* The pavement line: the top of the parapet, which is also what the bus runs
+     along. Anything standing on the bridge shares it. */
+  --bridge-deck: calc(var(--city-ground) + var(--city-h) * 20 / 124);
+  background-image:
+    url('img/london-bridge.svg'),
+    linear-gradient(180deg, rgba(150, 175, 205, 0) 45%, rgba(150, 175, 205, 0.12) 100%),
+    url('img/london-skyline.svg'),
+    url('img/london-rooftops.svg');
+  background-repeat: repeat-x, no-repeat, no-repeat, repeat-x;
+  background-position:
+    center bottom var(--city-ground),
+    center bottom var(--city-ground),
+    center bottom var(--city-ground),
+    center bottom var(--city-ground);
+  background-size:
+    auto var(--city-h),
+    100% var(--city-h),
+    auto var(--city-h),
+    auto calc(var(--city-h) * 44 / 124);
+}
+/* A tall strip costs the track height, which a short screen has least of. */
+@media (max-width: 760px) {
+  :root[data-theme="london"] .crowd { --city-h: 88px; }
+}
+:root[data-theme="london"] .crowd-cap,
+:root[data-theme="london"] .crowd-person {
+  height: calc(var(--sprite-scale) * 32px);
+}
+
+:root[data-theme="london"]:not(:has(.crowd)) #app { position: relative; z-index: 1; }
+:root[data-theme="london"]:not(:has(.crowd)) body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* Same six layers as the crowd strip, one ticker-height up so the roadway
+     runs along the top of the ticker rather than having its feet cut off. */
+  --city-h: 190px;
+  --bridge-deck: calc(var(--ticker-h) + var(--city-h) * 20 / 124);
+  background-image:
+    url('img/london-bridge.svg'),
+    linear-gradient(180deg, rgba(150, 175, 205, 0) 45%, rgba(150, 175, 205, 0.12) 100%),
+    url('img/london-skyline.svg'),
+    url('img/london-rooftops.svg');
+  background-repeat: repeat-x, no-repeat, no-repeat, repeat-x;
+  background-position:
+    center bottom var(--ticker-h),
+    center bottom var(--ticker-h),
+    center bottom var(--ticker-h),
+    center bottom var(--ticker-h);
+  background-size:
+    auto var(--city-h),
+    100% var(--city-h),
+    auto var(--city-h),
+    auto calc(var(--city-h) * 44 / 124);
+}
+
+/* A Routemaster along the front, left to right — which is the direction the
+   lane nearest the kerb runs in a country that drives on the left. Drawn well
+   out of scale with the city behind it (a bus at Big Ben's scale would be six
+   pixels long); the size difference is what makes it read as near traffic in
+   front of a far skyline rather than a toy parked on the Embankment.
+
+   In the crowd strip it is an absolutely positioned pseudo-element, which is
+   out of flow and so never becomes a flex item of .crowd; .crowd's existing
+   `overflow: hidden` is what clips it at both ends of its run. */
+:root[data-theme="london"] .crowd::before,
+:root[data-theme="london"]:not(:has(.crowd)) #app::after {
+  content: '';
+  /* One number per mounting; the height follows the sprite's own proportions.
+     The two skylines are drawn at different heights, so the bus is sized
+     against each rather than shared, or it would read as a different distance
+     away on the home page than on the race view. */
+  width: var(--bus-w);
+  aspect-ratio: 58 / 28;
+  pointer-events: none;
+  background: url('img/london-bus.svg') no-repeat center / contain;
+}
+/* Behind the crowd, not over it — the road it is on runs along the back of the
+   grandstand. Absolute positioning alone would paint it in front of them, since
+   a positioned element outranks its non-positioned siblings whatever the source
+   order; the negative z-index is what puts it back. Its wheels dip the same few
+   pixels into the top of the crowd that the buildings' feet do, so bus and city
+   stand on one ground line. */
+:root[data-theme="london"] .crowd::before {
+  --bus-w: 92px;
+  position: absolute;
+  left: 0;
+  bottom: var(--bridge-deck);
+  z-index: -1;
+}
+:root[data-theme="london"]:not(:has(.crowd)) #app::after {
+  --bus-w: 140px;
+  position: fixed;
+  left: 0;
+  bottom: var(--bridge-deck);
+  z-index: -1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="london"] .crowd::before,
+  :root[data-theme="london"]:not(:has(.crowd)) #app::after {
+    animation: london-bus-pass 34s linear infinite;
+  }
+}
+/* Starts and ends fully off-screen, so it arrives and leaves rather than
+   popping. The long gap between passes is the point — a bus you see every half
+   minute is scenery, a bus you see constantly is a distraction. */
+@keyframes london-bus-pass {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100vw); }
+}
+/* Same rule the crowd and the chromatic wash follow — the page stops moving
+   once the race is over. */
+:root[data-theme="london"] .race.finished .crowd::before {
+  animation-play-state: paused;
+}
+
 /* A neutral --lane + luminosity flattens the dirt to greyscale texture; the wash
    then paints hue/saturation back across the lane's width with `color` (which
    takes hue+sat from the gradient and luminosity from the backdrop), so the

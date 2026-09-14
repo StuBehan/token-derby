@@ -3,6 +3,7 @@ export type ThemeId =
   | 'midnight'
   | 'turf'
   | 'photo'
+  | 'london'
   | 'chromatic'
   | 'phosphor'
   | 'matrix';
@@ -15,6 +16,7 @@ export const THEMES: readonly Theme[] = [
   { id: 'midnight', label: 'Midnight' },
   { id: 'turf', label: 'Turf' },
   { id: 'photo', label: 'Photo Finish' },
+  { id: 'london', label: 'London' },
   { id: 'chromatic', label: 'Chromatic Circuit' },
   /* Phosphor before Matrix: same palette, and Phosphor is the calmer of the two
      (backdrop rain only), so the pair reads quiet-then-loud in the dropdown. */
