@@ -394,29 +394,67 @@ function rooftops() {
 //   y  48..53   lower walkway        y  78..116  the road arch's opening
 //   y 116..124  roadway deck
 function roadway() {
-  const W = 120, H = 124;
+  // Five lamp columns and one phone box per tile. The tile is deliberately five
+  // lamp-spacings wide rather than one: it is the only way to guarantee the box
+  // never lands on a lamp. Positioned as its own background layer at some
+  // percentage of the width it eventually collides with one, because the lamp
+  // grid and the percentage have nothing to do with each other. In here they
+  // are the same image and cannot drift apart.
+  const W = 600, H = 124, SPACING = 120;
   const c = canvas(W, H);
   const BRIDGE = 12, COPING = 13, WARM = 3;
+
+  // Drawn before the parapet so the wall covers its plinth — it stands ON the
+  // bridge, behind the wall, not on top of it.
+  drawPhoneBox(c, 20, 108);
 
   // Parapet. London Bridge is a plain post-war box girder — no towers, no
   // chains, no ornament; a flat wall and a line of lamp columns is the whole of
   // it. That plainness is the point: it is the bridge nobody photographs, one
   // upstream from the one everybody does, which is sitting in the skyline tile
   // behind it.
+  //
   // Kept low on purpose: the parapet occludes the foot of everything behind it,
   // and a tall one cuts the piers and deck off Tower Bridge downriver.
   c.box(0, 106, W, H - 106, BRIDGE);
   c.box(0, 104, W, 3, COPING);                // coping course along the top
   c.box(0, 116, W, 1, COPING);                // the girder's shadow line
-  c.box(118, 108, 1, 12, COPING);             // expansion joint, once a tile
 
-  // A lamp column per tile. Its spacing IS the tile width, so the rhythm of the
-  // lamps is what gives the bridge its length as the tile repeats.
-  c.box(58, 72, 3, 34, BRIDGE);
-  c.box(56, 66, 7, 6, BRIDGE);
-  c.box(57, 68, 5, 3, WARM);
-
+  for (let i = 0; i < W / SPACING; i++) {
+    const x = i * SPACING;
+    c.box(x + 118, 108, 1, 12, COPING);       // expansion joint
+    c.box(x + 58, 72, 3, 34, BRIDGE);         // lamp column
+    c.box(x + 56, 66, 7, 6, BRIDGE);
+    c.box(x + 57, 68, 5, 3, WARM);
+  }
   return toSvg(c);
+}
+
+// A K6, drawn into whatever tile wants one with its base at `yBase`. Smaller
+// than it was when it lived in its own file: this is a bridge away, and what
+// survives at that size is the stepped dome, the sign band and the lit panes.
+function drawPhoneBox(c, x, yBase) {
+  const RED = 16, GLASS = 17, BASE = 18, SIGN = 19;
+  Object.assign(PALETTE, {
+    16: '#a8161d', // darker than the bus — these read as a deeper red at night
+    17: '#ffcf86', // lit from the inside
+    18: '#241a1c',
+    19: '#fff1d2', // the TELEPHONE panel
+  });
+  const y = yBase - 38;
+
+  c.box(x + 5, y, 4, 2, RED);                 // crown
+  c.box(x + 2, y + 2, 10, 2, RED);            // stepped dome
+  c.box(x, y + 4, 14, 3, RED);                // roof slab
+  c.box(x, y + 7, 14, 3, RED);                // sign band
+  c.box(x + 2, y + 8, 10, 2, SIGN);
+  c.box(x, y + 10, 14, 24, RED);              // body
+  for (let col = 0; col < 3; col++) {
+    for (let row = 0; row < 5; row++) {
+      c.box(x + 2 + col * 4, y + 12 + row * 4, 3, 3, GLASS);
+    }
+  }
+  c.box(x, y + 34, 14, 4, BASE);              // plinth
 }
 
 // ── Victorian street lamps ─────────────────────────────────────────────────
@@ -451,42 +489,6 @@ function streetLamps() {
   c.box(X - 1, 11, 3, 5, IRON);          // finial
   c.box(X - 1, 9, 3, 2, WARM);
 
-  return toSvg(c);
-}
-
-// ── A K6 telephone box ─────────────────────────────────────────────────────
-// Placed individually rather than tiled — two of them on the far kerb. The
-// silhouette is almost entirely in the roof: the stepped dome and its crown are
-// what separate a K6 from a red rectangle, so they get a third of the height
-// despite being a fraction of the real thing.
-function phoneBox() {
-  const W = 18, H = 50;
-  const c = canvas(W, H);
-  const RED = 16, GLASS = 17, BASE = 18, SIGN = 19;
-  Object.assign(PALETTE, {
-    16: '#a8161d', // darker than the bus — these read as a deeper red at night
-    17: '#ffcf86', // lit from the inside
-    18: '#241a1c', // plinth — dark, but not the hole in the page that pure black was
-    19: '#fff1d2', // the TELEPHONE panel
-  });
-
-  // Three shallow steps, each only a little narrower than the one below — a
-  // dome, not a chimney. Going straight from 16 wide to 4 put a stack on the
-  // roof instead of a crown on a dome.
-  c.box(6, 0, 6, 2, RED);        // crown
-  c.box(3, 2, 12, 2, RED);
-  c.box(1, 4, 16, 3, RED);       // roof slab
-  c.box(1, 7, 16, 4, RED);       // sign band
-  c.box(3, 8, 12, 2, SIGN);
-  c.box(1, 11, 16, 35, RED);     // body
-
-  for (let col = 0; col < 3; col++) {
-    for (let row = 0; row < 7; row++) {
-      c.box(3 + col * 4, 14 + row * 4, 3, 3, GLASS);
-    }
-  }
-
-  c.box(0, 46, 18, 4, BASE);     // plinth, barely proud of the body
   return toSvg(c);
 }
 
@@ -554,7 +556,6 @@ function bus() {
 writeFileSync(join(IMG, 'london-skyline.svg'), skyline());
 writeFileSync(join(IMG, 'london-bridge.svg'), roadway());
 writeFileSync(join(IMG, 'london-lamp.svg'), streetLamps());
-writeFileSync(join(IMG, 'london-phonebox.svg'), phoneBox());
 writeFileSync(join(IMG, 'london-rooftops.svg'), rooftops());
 writeFileSync(join(IMG, 'london-bus.svg'), bus());
-console.log('wrote london-skyline, -bridge, -lamp, -phonebox, -rooftops, -bus');
+console.log('wrote london-skyline, -bridge, -lamp, -rooftops, -bus');
