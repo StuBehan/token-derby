@@ -133,10 +133,16 @@ tr.user-row:hover { background: rgba(209,213,219,0.08); }
 }
 .claim-entry-add:hover { border-color: var(--accent); }
 .claim-drill {
-  margin-left: 0.5rem;
-  padding: 0 0.4rem;
-  font-size: 0.85em;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: none;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: .8rem;
   cursor: pointer;
 }
+.claim-drill:hover { border-color: var(--accent); }
 .claim-detail ul { margin: 0; padding-left: 1.2rem; }
 .claim-detail li { padding: 0.15rem 0; }
