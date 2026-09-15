@@ -24,15 +24,29 @@ export const handler: ApiHandler = async (event) => {
   if (body.item_type !== 'hat') return err('BAD_REQUEST', "item_type must be 'hat'");
 
   // Legacy callers send a single hat; lift it so there is one code path below.
-  const entries: ClaimEntry[] = Array.isArray(body.entries)
+  const rawEntries: unknown[] = Array.isArray(body.entries)
     ? body.entries
     : body.hat_id
       ? [body.variant !== undefined ? { hat_id: body.hat_id, variant: body.variant } : { hat_id: body.hat_id }]
       : [];
 
-  if (entries.length === 0) return err('BAD_REQUEST', 'entries must contain at least one hat');
-  if (entries.length > MAX_PACK_ENTRIES) {
+  if (rawEntries.length === 0) return err('BAD_REQUEST', 'entries must contain at least one hat');
+  if (rawEntries.length > MAX_PACK_ENTRIES) {
     return err('BAD_REQUEST', `entries may contain at most ${MAX_PACK_ENTRIES} hats`);
+  }
+
+  // Rebuild each entry as a clean { hat_id, variant? } so a malformed or
+  // extra-key entry can never crash a lookup or get echoed back verbatim.
+  const entries: ClaimEntry[] = [];
+  for (const raw of rawEntries) {
+    if (typeof raw !== 'object' || raw === null) {
+      return err('BAD_REQUEST', 'Each entry must be an object with a hat_id');
+    }
+    const { hat_id, variant } = raw as { hat_id?: unknown; variant?: unknown };
+    if (typeof hat_id !== 'string') {
+      return err('BAD_REQUEST', 'Each entry must have a string hat_id');
+    }
+    entries.push(variant === undefined ? { hat_id } : { hat_id, variant: variant as number });
   }
 
   for (const entry of entries) {

@@ -19,6 +19,7 @@ const RARITY_ORDER = ['common', 'rare', 'epic', 'legendary', 'limited'] as const
 function grouped(): string {
   return RARITY_ORDER.map(rarity => {
     const hats = HATS.filter(h => h.rarity === rarity);
+    if (hats.length === 0) return '';
     const opts = hats.map(h =>
       `<option value="${esc(h.id)}">${esc(h.name)}${h.rollable ? '' : ' (exclusive)'}</option>`,
     ).join('');
@@ -134,8 +135,14 @@ export function renderClaims(root: HTMLElement, deps: ClaimsDeps): void {
   const redemptionRow = (r: AdminClaimRedemption): string => {
     const who = r.user_name ?? r.user_id;
     const horse = r.horse_name ?? r.horse_id;
-    const what = r.outcome === 'duplicate' ? `duplicate · +${r.xp_awarded ?? 0} XP` : 'hat';
-    return `<li>${esc(who)} on ${esc(horse)} — ${esc(what)} <span class="muted">${esc(r.redeemed_at.slice(0, 10))}</span></li>`;
+    const hat = hatById(r.hat_id);
+    const hatLabel = hat
+      ? (r.variant !== undefined && !isAnimatedHat(hat) ? `${hat.name} #${r.variant + 1}` : hat.name)
+      : r.hat_id;
+    const what = r.outcome === 'duplicate'
+      ? `duplicate ${esc(hatLabel)} · +${r.xp_awarded ?? 0} XP`
+      : esc(hatLabel);
+    return `<li>${esc(who)} on ${esc(horse)} — ${what} <span class="muted">${esc(r.redeemed_at.slice(0, 10))}</span></li>`;
   };
 
   listEl.addEventListener('click', (e) => {

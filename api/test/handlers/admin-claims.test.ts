@@ -129,6 +129,26 @@ describe('admin-create-claim packs', () => {
     expect((await create({ item_type: 'hat', entries })).statusCode).toBe(400);
   });
 
+  it('rejects a null entry instead of crashing', async () => {
+    const res = await create({ item_type: 'hat', entries: [null] });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects a string entry instead of crashing', async () => {
+    const res = await create({ item_type: 'hat', entries: ['flat_cap'] });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('drops unknown keys from an entry rather than storing or echoing them', async () => {
+    const res = await create({
+      item_type: 'hat',
+      entries: [{ hat_id: 'flat_cap', variant: 0, extra: 'should not survive' }],
+    });
+    expect(res.statusCode).toBe(200);
+    expect(body(res).entries).toEqual([{ hat_id: 'flat_cap', variant: 0 }]);
+    expect(res.body).not.toContain('extra');
+  });
+
   it('rejects an unknown hat id', async () => {
     expect((await create({ item_type: 'hat', entries: [{ hat_id: 'nope' }] })).statusCode).toBe(400);
   });

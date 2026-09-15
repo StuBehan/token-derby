@@ -287,7 +287,17 @@ describe('pack builder', () => {
     expect(createClaim.mock.calls[0]![0].entries[0]!.variant).toBeUndefined();
   });
 
-  it('offers the limited optgroup', () => {
+  it('skips an empty rarity rather than rendering a bare optgroup', () => {
+    // No limited hat exists in the catalog yet, so this pins that the
+    // renderer omits the group instead of showing a header with nothing under it.
+    const labels = Array.from(mounted().querySelectorAll('optgroup')).map(g => g.getAttribute('label'));
+    expect(labels).not.toContain('limited');
+  });
+
+  it('renders the optgroup for a rarity once it has a hat', () => {
+    const spy = vi.spyOn(HATS, 'filter');
+    spy.mockImplementation((fn: any) =>
+      [...HATS, { ...COMMON, id: 'test_limited', rarity: 'limited' }].filter(fn));
     const labels = Array.from(mounted().querySelectorAll('optgroup')).map(g => g.getAttribute('label'));
     expect(labels).toContain('limited');
   });
@@ -343,5 +353,6 @@ describe('pack builder', () => {
     await flush();
     expect(fetchRedemptions).toHaveBeenCalledWith('ABCDEFGHJKLM');
     expect(root.querySelector('.claim-detail')!.textContent).toContain('Thunderbolt');
+    expect(root.querySelector('.claim-detail')!.textContent).toContain(`${COMMON.name} #1`);
   });
 });

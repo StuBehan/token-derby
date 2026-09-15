@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
-import { putClaim, getClaim, listClaims } from '../../src/db/claims.js';
+import { putClaim, getClaim, listClaims, redeemClaimSlot } from '../../src/db/claims.js';
 import { generateClaimCode } from '../../src/lib/claim-code.js';
 import { ddb, TABLE } from '../../src/db/client.js';
 import { claimKey } from '../../src/db/keys.js';
@@ -103,5 +103,72 @@ describe('pack claims', () => {
     await putRawLegacyClaim(code, { hat_id: 'rainbow_crown' });
     const read = await getClaim(code);
     expect(read?.entries).toEqual([{ hat_id: 'rainbow_crown' }]);
+  });
+});
+
+// DynamoDB Local never emits TransactionConflict, so these classify the
+// retry behaviour against an injected error shaped like the real one.
+describe('redeemClaimSlot conflict retry', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  function conflictError(): any {
+    const e: any = new Error('Transaction cancelled');
+    e.name = 'TransactionCanceledException';
+    e.CancellationReasons = [{ Code: 'None' }, { Code: 'TransactionConflict' }];
+    return e;
+  }
+
+  function conditionalCheckFailed(onUpdate: boolean): any {
+    const e: any = new Error('Transaction cancelled');
+    e.name = 'TransactionCanceledException';
+    e.CancellationReasons = onUpdate
+      ? [{ Code: 'None' }, { Code: 'ConditionalCheckFailed' }]
+      : [{ Code: 'ConditionalCheckFailed' }, { Code: 'None' }];
+    return e;
+  }
+
+  it('retries a TransactionConflict and succeeds on a later attempt', async () => {
+    const claim = await seed();
+    const sendSpy = vi.spyOn(ddb, 'send');
+    sendSpy.mockRejectedValueOnce(conflictError());
+    sendSpy.mockRejectedValueOnce(conflictError());
+    const result = await redeemClaimSlot(claim, {
+      user_id: 'u-retry-succeed', horse_id: 'sh-1', outcome: 'hat', hat_id: 'flat_cap', variant: 0,
+    });
+    expect(result).toBe('won');
+    expect(sendSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns "conflict" after exhausting all retry attempts', async () => {
+    const claim = await seed();
+    const sendSpy = vi.spyOn(ddb, 'send');
+    sendSpy.mockRejectedValue(conflictError());
+    const result = await redeemClaimSlot(claim, {
+      user_id: 'u-retry-exhaust', horse_id: 'sh-1', outcome: 'hat', hat_id: 'flat_cap', variant: 0,
+    });
+    expect(result).toBe('conflict');
+    expect(sendSpy).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not retry a ConditionalCheckFailed on the slot-limit update', async () => {
+    const claim = await seed();
+    const sendSpy = vi.spyOn(ddb, 'send');
+    sendSpy.mockRejectedValueOnce(conditionalCheckFailed(true));
+    const result = await redeemClaimSlot(claim, {
+      user_id: 'u-retry-exhausted-claim', horse_id: 'sh-1', outcome: 'hat', hat_id: 'flat_cap', variant: 0,
+    });
+    expect(result).toBe('exhausted');
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a ConditionalCheckFailed on the redemption Put', async () => {
+    const claim = await seed();
+    const sendSpy = vi.spyOn(ddb, 'send');
+    sendSpy.mockRejectedValueOnce(conditionalCheckFailed(false));
+    const result = await redeemClaimSlot(claim, {
+      user_id: 'u-retry-already-redeemed', horse_id: 'sh-1', outcome: 'hat', hat_id: 'flat_cap', variant: 0,
+    });
+    expect(result).toBe('already_redeemed');
+    expect(sendSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -90,11 +90,8 @@ export async function lookupClaim(rawCode: string, user_id: string): Promise<Loo
     }
     return { ok: false, code: 'CLAIM_NOT_FOUND', message: 'No such claim token' };
   }
-  // Advisory only — these are reads and can go stale. The transaction in
-  // redeemClaimSlot remains the sole enforcement of both rules; this just
-  // saves the player from picking a horse for a claim they cannot use.
-  // Per-user check first: if this user is one of the redeemers, tell them
-  // that rather than the more ambiguous "fully redeemed".
+  // Advisory only, can go stale — redeemClaimSlot's transaction is the real
+  // gate. Per-user check first, so a redeemer sees this over "fully redeemed".
   if (await getClaimRedemption(claim.code, user_id)) {
     return { ok: false, code: 'CLAIM_ALREADY_REDEEMED', message: 'You have already used this claim token' };
   }

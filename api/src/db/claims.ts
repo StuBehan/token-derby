@@ -89,16 +89,27 @@ export type RedemptionInput = {
   xp_awarded?: number;
 };
 
-export type SlotResult = 'won' | 'already_redeemed' | 'exhausted';
+export type SlotResult = 'won' | 'already_redeemed' | 'exhausted' | 'conflict';
 
 function compact(o: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 }
 
+const RETRYABLE_CANCELLATION_CODES = new Set([
+  'TransactionConflict',
+  'ThrottlingError',
+  'ProvisionedThroughputExceeded',
+]);
+const MAX_ATTEMPTS = 4;
+const RETRY_BASE_DELAY_MS = 25;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
- * The single-use gate. Both conditions are one transaction: the Put claims
- * this user's slot, the Update claims one of the limited slots. Neither
- * applies unless both hold, so concurrent redeemers cannot overshoot.
+ * The single-use gate: one transaction claims this user's slot and one of
+ * the limited slots, retrying a transient conflict rather than losing it.
  */
 export async function redeemClaimSlot(
   claim: ClaimRecord,
@@ -110,43 +121,49 @@ export async function redeemClaimSlot(
     redeemed_at: new Date().toISOString(),
     ttl: claimTtl(claim.expires_at),
   });
-  try {
-    await ddb.send(new TransactWriteCommand({
-      TransactItems: [
-        {
-          Put: {
-            TableName: TABLE,
-            Item: item,
-            ConditionExpression: 'attribute_not_exists(pk)',
-          },
-        },
-        {
-          Update: {
-            TableName: TABLE,
-            Key: claimKey(claim.code),
-            UpdateExpression: 'SET redeemed_count = if_not_exists(redeemed_count, :zero) + :one',
-            // if_not_exists() is an update-expression-only function; a
-            // condition expression must spell the same default-to-0 as OR.
-            ConditionExpression:
-              'attribute_exists(pk) AND attribute_not_exists(redeemed_at) '
-              + 'AND (attribute_not_exists(redeemed_count) OR redeemed_count < :max)',
-            ExpressionAttributeValues: {
-              ':zero': 0,
-              ':one': 1,
-              ':max': claim.max_redemptions,
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      await ddb.send(new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: TABLE,
+              Item: item,
+              ConditionExpression: 'attribute_not_exists(pk)',
             },
           },
-        },
-      ],
-    }));
-    return 'won';
-  } catch (e: any) {
-    if (e?.name !== 'TransactionCanceledException') throw e;
-    const reasons = e.CancellationReasons ?? [];
-    if (reasons[0]?.Code === 'ConditionalCheckFailed') return 'already_redeemed';
-    if (reasons[1]?.Code === 'ConditionalCheckFailed') return 'exhausted';
-    throw e;
+          {
+            Update: {
+              TableName: TABLE,
+              Key: claimKey(claim.code),
+              UpdateExpression: 'SET redeemed_count = if_not_exists(redeemed_count, :zero) + :one',
+              // if_not_exists() is an update-expression-only function; a
+              // condition expression must spell the same default-to-0 as OR.
+              ConditionExpression:
+                'attribute_exists(pk) AND attribute_not_exists(redeemed_at) '
+                + 'AND (attribute_not_exists(redeemed_count) OR redeemed_count < :max)',
+              ExpressionAttributeValues: {
+                ':zero': 0,
+                ':one': 1,
+                ':max': claim.max_redemptions,
+              },
+            },
+          },
+        ],
+      }));
+      return 'won';
+    } catch (e: any) {
+      if (e?.name !== 'TransactionCanceledException') throw e;
+      const reasons = e.CancellationReasons ?? [];
+      if (reasons[0]?.Code === 'ConditionalCheckFailed') return 'already_redeemed';
+      if (reasons[1]?.Code === 'ConditionalCheckFailed') return 'exhausted';
+      const retryable = reasons.some((r: any) => RETRYABLE_CANCELLATION_CODES.has(r?.Code));
+      if (!retryable) throw e;
+      if (attempt === MAX_ATTEMPTS) return 'conflict';
+      await delay(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) + Math.random() * RETRY_BASE_DELAY_MS);
+    }
   }
+  return 'conflict';
 }
 
 function toRedemption(item: Record<string, unknown>): AdminClaimRedemption {

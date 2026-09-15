@@ -27,7 +27,7 @@ export const handler: ApiHandler = async (event) => {
 
   const decision = decidePackOutcome(horse.hats ?? [], claim.entries, horse.xp);
   if (decision.result === 'unknown_hat') {
-    return err('BAD_REQUEST', 'This claim references a hat that no longer exists');
+    return err('BAD_REQUEST', 'This claim references a hat or hat variant that no longer exists');
   }
 
   const slot = await redeemClaimSlot(claim, {
@@ -45,6 +45,9 @@ export const handler: ApiHandler = async (event) => {
   }
   if (slot === 'exhausted') {
     return err('CLAIM_EXHAUSTED', 'This claim token has been fully redeemed');
+  }
+  if (slot === 'conflict') {
+    return err('RATE_LIMITED', 'Too many people are redeeming this claim right now. Try again in a moment.');
   }
 
   if (decision.result === 'hat') {
