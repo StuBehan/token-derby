@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { makeUser, makeHorse, type TestUser } from '../helpers/auth-helper.js';
 import { CURRENT_CLI_VERSION } from '../helpers/cli-version.js';
-import { putClaim, getClaim, getClaimRedemption } from '../../src/db/claims.js';
+import { putClaim, getClaim, getClaimRedemption, redeemClaimSlot } from '../../src/db/claims.js';
 import { generateClaimCode } from '../../src/lib/claim-code.js';
 import { formatClaimCode } from '@token-derby/shared';
 import { getStableHorse, deleteStableHorse, awardHorseXp, appendStableHorseHat } from '../../src/db/stable.js';
@@ -39,6 +39,18 @@ async function seedClaim(hat_id = 'flat_cap', variant: number | undefined = 0, e
   });
 }
 
+async function seedPack(overrides: Partial<Parameters<typeof putClaim>[0]> = {}) {
+  return putClaim({
+    code: generateClaimCode(),
+    item_type: 'hat',
+    entries: [{ hat_id: 'flat_cap', variant: 0 }],
+    max_redemptions: 1,
+    expires_at: future(),
+    created_by: 'admin',
+    ...overrides,
+  });
+}
+
 describe('get-claim probe', () => {
   it('requires authentication', async () => {
     const claim = await seedClaim();
@@ -50,7 +62,7 @@ describe('get-claim probe', () => {
     const claim = await seedClaim();
     const res = await probe(ev(user, claim.code));
     expect(res.statusCode).toBe(200);
-    expect(body(res)).toEqual({ item_type: 'hat' });
+    expect(body(res)).toEqual({ item_type: 'hat', entry_count: 1, remaining: 1 });
     expect(res.body).not.toContain('flat_cap');
   });
 
@@ -91,6 +103,50 @@ describe('get-claim probe', () => {
     const res = await probe(ev(user, claim.code));
     expect(res.statusCode).toBe(409);
     expect(body(res).code).toBe('CLAIM_ALREADY_REDEEMED');
+  });
+});
+
+describe('get-claim probe reveals pack shape', () => {
+  it('reports pack size and remaining slots without naming a hat', async () => {
+    const user = await makeUser('Probe_PackShape');
+    const claim = await seedPack({
+      entries: [{ hat_id: 'flat_cap', variant: 0 }, { hat_id: 'beanie' }, { hat_id: 'fez' }],
+      max_redemptions: 10,
+    });
+    const res = await probe(ev(user, claim.code));
+    expect(body(res)).toEqual({ item_type: 'hat', entry_count: 3, remaining: 10 });
+    expect(res.body).not.toContain('flat_cap');
+    expect(res.body).not.toContain('beanie');
+    expect(res.body).not.toContain('fez');
+  });
+
+  it('counts down remaining as slots are taken', async () => {
+    const user = await makeUser('Probe_PackCountdown');
+    const claim = await seedPack({ entries: [{ hat_id: 'flat_cap', variant: 0 }], max_redemptions: 3 });
+    await redeemClaimSlot(claim, {
+      user_id: 'u-1', horse_id: 'sh-1', outcome: 'hat', hat_id: 'flat_cap', variant: 0,
+    });
+    const res = await probe(ev(user, claim.code));
+    expect(body(res).remaining).toBe(2);
+  });
+
+  it('reports one remaining for a fresh single-use claim', async () => {
+    const user = await makeUser('Probe_PackFresh');
+    const claim = await seedPack({ entries: [{ hat_id: 'flat_cap', variant: 0 }], max_redemptions: 1 });
+    const res = await probe(ev(user, claim.code));
+    expect(body(res).remaining).toBe(1);
+  });
+
+  it('never reports remaining below 1 on a successful probe', async () => {
+    const user = await makeUser('Probe_PackFloor');
+    const claim = await seedPack({ entries: [{ hat_id: 'flat_cap', variant: 0 }], max_redemptions: 2 });
+    await redeemClaimSlot(claim, {
+      user_id: 'u-1', horse_id: 'sh-1', outcome: 'hat', hat_id: 'flat_cap', variant: 0,
+    });
+    const res = await probe(ev(user, claim.code));
+    expect(res.statusCode).toBe(200);
+    expect(body(res).remaining).toBeGreaterThanOrEqual(1);
+    expect(body(res).remaining).toBe(1);
   });
 });
 

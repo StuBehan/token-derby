@@ -14,7 +14,11 @@ export const handler: ApiHandler = async (event) => {
   const found = await lookupClaim(rawCode, auth.user_id);
   if (!found.ok) return err(found.code, found.message);
 
-  // Deliberately omits hat_id — the reveal animation is the payoff.
-  const response: ClaimProbeResponse = { item_type: found.claim.item_type };
+  // Deliberately omits hat identity — the reveal animation is the payoff.
+  const response: ClaimProbeResponse = {
+    item_type: found.claim.item_type,
+    entry_count: found.claim.entries.length,
+    remaining: found.claim.max_redemptions - found.claim.redeemed_count,
+  };
   return ok(response);
 };
