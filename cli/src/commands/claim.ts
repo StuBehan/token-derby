@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from 'ink';
-import { hatById } from '@token-derby/shared';
+import { hatById, isAnimatedHat } from '@token-derby/shared';
 import type { StableHorse } from '@token-derby/shared';
 import { ApiError } from '../api/client.js';
 import { listStable, probeClaim, redeemClaim, equipHat } from '../api/endpoints.js';
@@ -72,7 +72,7 @@ export async function claimCommand(token: string | undefined): Promise<number> {
 
   if (result.result === 'hat') {
     const hat = hatById(result.collected.id)!;
-    const variantSuffix = hat.rarity !== 'legendary' && result.collected.variant !== undefined
+    const variantSuffix = !isAnimatedHat(hat) && result.collected.variant !== undefined
       ? ` #${result.collected.variant + 1}`
       : '';
     console.log(`\n✨ ${hat.name}${variantSuffix} [${hat.rarity.toUpperCase()}]\n`);

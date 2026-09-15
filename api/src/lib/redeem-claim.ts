@@ -1,4 +1,4 @@
-import { hatById, levelInfo, normaliseClaimCode } from '@token-derby/shared';
+import { hatById, isAnimatedHat, levelInfo, normaliseClaimCode } from '@token-derby/shared';
 import type { CollectedHat, ErrorCode, HatId } from '@token-derby/shared';
 import { DUPLICATE_XP_FRACTION } from './roll-hat.js';
 import { getClaim, type ClaimRecord } from '../db/claims.js';
@@ -22,8 +22,8 @@ export function decideClaimOutcome(
   const hat = hatById(hat_id);
   if (!hat) return { result: 'unknown_hat' };
 
-  const isLegendary = hat.rarity === 'legendary';
-  const alreadyHave = isLegendary
+  const animated = isAnimatedHat(hat);
+  const alreadyHave = animated
     ? inventory.some(c => c.id === hat_id)
     : inventory.some(c => c.id === hat_id && c.variant === variant);
 
@@ -36,7 +36,7 @@ export function decideClaimOutcome(
   }
 
   const collected: CollectedHat = { id: hat_id, obtained_at: new Date().toISOString() };
-  if (!isLegendary) collected.variant = variant;
+  if (!animated) collected.variant = variant;
   return { result: 'hat', collected };
 }
 

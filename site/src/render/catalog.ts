@@ -1,4 +1,4 @@
-import { HATS } from '@token-derby/shared';
+import { HATS, hatColors, isAnimatedHat, variantCount } from '@token-derby/shared';
 import type { Hat, HatRarity, HorseColors } from '@token-derby/shared';
 import { horseFaceSvg } from '../horse-face.js';
 import { buildHorseSvg } from '../sprite-svg.js';
@@ -15,10 +15,6 @@ const PALETTES: Record<string, Palette> = {
 };
 
 const RARITY_ORDER: HatRarity[] = ['common', 'rare', 'epic', 'legendary'];
-
-function variantCount(hat: Hat): number {
-  return hat.rarity === 'legendary' ? 1 : hat.variants.length;
-}
 
 export function renderCatalog(root: HTMLElement): () => void {
   const doc = root.ownerDocument;
@@ -117,9 +113,9 @@ function renderHatRow(doc: Document, hat: Hat, palette: Palette): HTMLElement {
       ${hat.rollable ? '' : '<span class="hat-exclusive">EXCLUSIVE</span>'}
     </div>
     <div class="hat-id">${escapeHtml(hat.id)}</div>
-    ${hat.rarity === 'legendary'
+    ${isAnimatedHat(hat)
       ? '<div class="hat-count">one-of-one · animated</div>'
-      : `<div class="hat-count">${hat.variants.length} ${hat.variants.length === 1 ? 'variant' : 'variants'}</div>`}
+      : `<div class="hat-count">${variantCount(hat)} ${variantCount(hat) === 1 ? 'variant' : 'variants'}</div>`}
   `;
   row.appendChild(meta);
 
@@ -148,7 +144,7 @@ function renderVariantCard(doc: Document, hat: Hat, variantIdx: number, palette:
 
   const label = doc.createElement('div');
   label.className = 'variant-name';
-  label.textContent = hat.rarity === 'legendary' ? hat.name : `${hat.name} #${variantIdx + 1}`;
+  label.textContent = isAnimatedHat(hat) ? hat.name : `${hat.name} #${variantIdx + 1}`;
   card.appendChild(label);
 
   return card;
@@ -159,7 +155,7 @@ function renderVariantCard(doc: Document, hat: Hat, variantIdx: number, palette:
 // (#2C2C2C ≈ 0.027, #1A0033 ≈ 0.005) into the "light bg" bucket while
 // keeping mid-tones like the chestnut palette saddle on dark.
 function hatNeedsLightBg(hat: Hat, variantIdx: number): boolean {
-  const colors = hat.rarity === 'legendary' ? hat.colors : (hat.variants[variantIdx] ?? hat.variants[0]!);
+  const colors = hatColors(hat, variantIdx);
   return relativeLuminance(colors.A) < 0.18;
 }
 

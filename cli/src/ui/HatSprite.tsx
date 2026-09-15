@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import type { Hat } from '@token-derby/shared';
+import { hatColors, isAnimatedHat } from '@token-derby/shared';
 import { hexGridToHalfBlocks } from './half-blocks.js';
 
 type Props = {
@@ -16,7 +17,7 @@ type Props = {
  * an animation block, see AnimatedHatSprite below.
  */
 export function HatSprite({ hat, variant, centerIn }: Props) {
-  const colors = hatColorsFor(hat, variant ?? 0);
+  const colors = hatColors(hat, variant ?? 0);
   const grid = makeHatGrid(hat, colors, centerIn);
   const lines = hexGridToHalfBlocks(grid);
   return (
@@ -33,7 +34,7 @@ export function HatSprite({ hat, variant, centerIn }: Props) {
  * color in place. Non-legendary hats fall through to a single static render.
  */
 export function AnimatedHatSprite({ hat, variant, centerIn }: Props) {
-  if (hat.rarity !== 'legendary') {
+  if (!isAnimatedHat(hat)) {
     return <HatSprite hat={hat} variant={variant} centerIn={centerIn} />;
   }
   const frames = hat.animation.frames;
@@ -49,11 +50,6 @@ export function AnimatedHatSprite({ hat, variant, centerIn }: Props) {
   }, [frames.length, fps]);
   const framed: Hat = { ...hat, colors: { ...hat.colors, A: frames[idx]! } };
   return <HatSprite hat={framed} variant={variant} centerIn={centerIn} />;
-}
-
-function hatColorsFor(hat: Hat, variantIdx: number): { A: string; Q?: string } {
-  if (hat.rarity === 'legendary') return hat.colors;
-  return hat.variants[variantIdx] ?? hat.variants[0]!;
 }
 
 function makeHatGrid(

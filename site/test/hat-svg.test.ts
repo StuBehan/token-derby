@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Window } from 'happy-dom';
-import { buildHatGroup, buildLegendaryKeyframes } from '../src/hat-svg.js';
+import { buildHatGroup, buildAnimatedKeyframes } from '../src/hat-svg.js';
 import { hatById, HATS } from '@token-derby/shared';
 
 describe('buildHatGroup', () => {
@@ -49,9 +49,9 @@ describe('buildHatGroup', () => {
   });
 });
 
-describe('buildLegendaryKeyframes', () => {
+describe('buildAnimatedKeyframes', () => {
   it('emits @keyframes for every legendary hat', () => {
-    const css = buildLegendaryKeyframes();
+    const css = buildAnimatedKeyframes();
     for (const hat of HATS.filter(h => h.rarity === 'legendary')) {
       expect(css).toContain(`@keyframes anim-${hat.id}`);
       expect(css).toContain(`.horse-hat-${hat.id} .hat-a`);

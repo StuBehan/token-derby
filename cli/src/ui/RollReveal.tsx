@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text } from 'ink';
 import type { Hat } from '@token-derby/shared';
+import { isAnimatedHat } from '@token-derby/shared';
 import { HatSprite, AnimatedHatSprite } from './HatSprite.js';
 import { ansiFg } from './half-blocks.js';
 
@@ -205,7 +206,7 @@ export function RollReveal({ outcome, onDone }: RevealProps) {
   }
   // phase === 'reveal' — only reachable for hat/duplicate outcomes
   if (outcome.kind === 'no_hat') return <GiftBox frame={BOX_EMPTY} color={BOX_COLOR} />;
-  return outcome.hat.rarity === 'legendary'
+  return isAnimatedHat(outcome.hat)
     ? <AnimatedHatSprite hat={outcome.hat} centerIn={{ w: SCENE_W, h: SCENE_H }} />
     : <HatSprite hat={outcome.hat} variant={outcome.variant} centerIn={{ w: SCENE_W, h: SCENE_H }} />;
 }

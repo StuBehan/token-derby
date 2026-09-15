@@ -2,6 +2,7 @@ import type { ApiHandler } from '../lib/http.js';
 import type { CreateClaimRequest, CreateClaimResponse } from '@token-derby/shared';
 import {
   hatById,
+  isAnimatedHat,
   DEFAULT_CLAIM_EXPIRY_DAYS,
   MAX_CLAIM_EXPIRY_DAYS,
 } from '@token-derby/shared';
@@ -25,7 +26,7 @@ export const handler: ApiHandler = async (event) => {
 
   // Legendaries are single-design; every other hat must name a variant so the
   // stored claim resolves to exactly one collectible.
-  if (hat.rarity === 'legendary') {
+  if (isAnimatedHat(hat)) {
     if (body.variant !== undefined) return err('BAD_REQUEST', 'Legendary hats have no variants');
   } else {
     if (!Number.isInteger(body.variant)) return err('BAD_REQUEST', 'variant is required');
@@ -44,7 +45,7 @@ export const handler: ApiHandler = async (event) => {
     code: generateClaimCode(),
     item_type: 'hat',
     hat_id: body.hat_id,
-    variant: hat.rarity === 'legendary' ? undefined : body.variant,
+    variant: isAnimatedHat(hat) ? undefined : body.variant,
     expires_at,
     created_by: 'admin',
   });

@@ -1,4 +1,4 @@
-import { HATS, hatById, formatClaimCode, DEFAULT_CLAIM_EXPIRY_DAYS } from '@token-derby/shared';
+import { HATS, hatById, isAnimatedHat, formatClaimCode, DEFAULT_CLAIM_EXPIRY_DAYS } from '@token-derby/shared';
 import type {
   AdminClaim, AdminClaimsResponse, CreateClaimRequest, CreateClaimResponse, Hat,
 } from '@token-derby/shared';
@@ -74,9 +74,9 @@ export function renderClaims(root: HTMLElement, deps: ClaimsDeps): void {
 
   const syncVariants = () => {
     const hat: Hat | undefined = hatById(hatSel.value);
-    const isLegendary = !hat || hat.rarity === 'legendary';
-    variantWrap.hidden = isLegendary;
-    variantSel.innerHTML = hat && hat.rarity !== 'legendary'
+    const animated = !hat || isAnimatedHat(hat);
+    variantWrap.hidden = animated;
+    variantSel.innerHTML = hat && !isAnimatedHat(hat)
       ? hat.variants.map((_, i) => `<option value="${i}">#${i + 1}</option>`).join('')
       : '';
   };
@@ -114,7 +114,7 @@ export function renderClaims(root: HTMLElement, deps: ClaimsDeps): void {
           hat_id: hatSel.value,
           expires_in_days: Number(daysEl.value),
         };
-        if (hat && hat.rarity !== 'legendary') body.variant = Number(variantSel.value);
+        if (hat && !isAnimatedHat(hat)) body.variant = Number(variantSel.value);
         try {
           const created = await deps.createClaim(body);
           codeEl.value = formatClaimCode(created.code);

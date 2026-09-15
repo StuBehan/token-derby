@@ -1,4 +1,4 @@
-import { HATS } from '@token-derby/shared';
+import { HATS, isAnimatedHat } from '@token-derby/shared';
 import type { CollectedHat, Hat, HatId, HatRarity } from '@token-derby/shared';
 
 export type RollDecision =
@@ -47,7 +47,7 @@ export function rollHat(inventory: CollectedHat[], rng: () => number = Math.rand
   if (pool.length === 0) return { result: 'no_hat' };
   const hat = pool[pickIndex(pool, rng)]!;
 
-  if (hat.rarity === 'legendary') {
+  if (isAnimatedHat(hat)) {
     const alreadyHave = inventory.some(c => c.id === hat.id);
     if (alreadyHave) return { result: 'duplicate', hat, hat_id: hat.id };
     return {
