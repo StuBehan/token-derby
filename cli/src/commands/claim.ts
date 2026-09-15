@@ -16,8 +16,9 @@ export async function claimCommand(token: string | undefined): Promise<number> {
   }
 
   // Probe first so a bad token fails before we mount any UI.
+  let probe;
   try {
-    await probeClaim(token);
+    probe = await probeClaim(token);
   } catch (e) {
     if (e instanceof ApiError) { console.error(`Error: ${e.code} ${e.message}`); return 1; }
     throw e;
@@ -35,7 +36,9 @@ export async function claimCommand(token: string | undefined): Promise<number> {
     return 1;
   }
 
-  console.log('\n🎁 A cosmetic has been awarded to you.\n');
+  console.log(probe.entry_count > 1
+    ? `\n🎁 A pack of ${probe.entry_count} cosmetics — one of them will be yours.\n`
+    : '\n🎁 A cosmetic has been awarded to you.\n');
 
   const picked = await new Promise<StableHorse | null>(resolve => {
     const app = render(React.createElement(HorsePicker, {
