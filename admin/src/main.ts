@@ -1,7 +1,7 @@
 import { getToken, setToken, clearToken } from './auth.js';
 import {
   login, fetchUsers, fetchOrganisations, renameUser, renameHorse, removeHat, deleteHorse,
-  fetchClaims, createClaim,
+  fetchClaims, createClaim, fetchClaimRedemptions,
 } from './api.js';
 import { renderLogin } from './render/login.js';
 import { renderDashboard } from './render/dashboard.js';
@@ -20,6 +20,7 @@ export function boot(root: HTMLElement): void {
       fetchOrganisations: () => fetchOrganisations(),
       fetchClaims: () => fetchClaims(),
       createClaim: (body) => createClaim(body),
+      fetchRedemptions: (code) => fetchClaimRedemptions(code),
       mutations: {
         renameUser: (userId, name) => renameUser(userId, name),
         renameHorse: (userId, horseId, name) => renameHorse(userId, horseId, name),

@@ -6,6 +6,7 @@ import type {
   CreateClaimRequest,
   CreateClaimResponse,
   AdminClaimsResponse,
+  AdminClaimRedemptionsResponse,
 } from '@token-derby/shared';
 import { getToken } from './auth.js';
 
@@ -135,4 +136,10 @@ export function createClaim(
 
 export function fetchClaims(fetchImpl: FetchFn = fetch): Promise<AdminClaimsResponse> {
   return authedGet<AdminClaimsResponse>('/api/admin/claims', fetchImpl);
+}
+
+export function fetchClaimRedemptions(
+  code: string, fetchImpl: FetchFn = fetch,
+): Promise<AdminClaimRedemptionsResponse> {
+  return authedGet<AdminClaimRedemptionsResponse>(`/api/admin/claims/${u(code)}/redemptions`, fetchImpl);
 }

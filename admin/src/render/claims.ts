@@ -1,12 +1,16 @@
-import { HATS, hatById, isAnimatedHat, formatClaimCode, DEFAULT_CLAIM_EXPIRY_DAYS } from '@token-derby/shared';
+import {
+  HATS, hatById, isAnimatedHat, formatClaimCode, DEFAULT_CLAIM_EXPIRY_DAYS, MAX_CLAIM_REDEMPTIONS,
+} from '@token-derby/shared';
 import type {
-  AdminClaim, AdminClaimsResponse, CreateClaimRequest, CreateClaimResponse, Hat,
+  AdminClaim, AdminClaimsResponse, AdminClaimRedemption, AdminClaimRedemptionsResponse,
+  ClaimEntry, CreateClaimRequest, CreateClaimResponse, Hat, VariantHat,
 } from '@token-derby/shared';
 import { esc } from '../esc.js';
 
 export type ClaimsDeps = {
   fetchClaims: () => Promise<AdminClaimsResponse>;
   createClaim: (body: CreateClaimRequest) => Promise<CreateClaimResponse>;
+  fetchRedemptions: (code: string) => Promise<AdminClaimRedemptionsResponse>;
   onUnauthorized: () => void;
 };
 
@@ -22,34 +26,44 @@ function grouped(): string {
   }).join('');
 }
 
+function entryRowHtml(): string {
+  return `<div class="claim-entry">
+    <select class="claim-hat">${grouped()}</select>
+    <select class="claim-variant"></select>
+    <button type="button" class="claim-entry-remove" aria-label="Remove hat">×</button>
+  </div>`;
+}
+
+function entrySummary(c: AdminClaim): string {
+  if (c.entries.length !== 1) return `Pack of ${c.entries.length}`;
+  const entry = c.entries[0]!;
+  const hat = hatById(entry.hat_id);
+  if (!hat) return entry.hat_id;
+  return entry.variant !== undefined ? `${hat.name} #${entry.variant + 1}` : hat.name;
+}
+
 function statusOf(c: AdminClaim): string {
-  if (c.redeemed_at) {
-    const who = c.redeemed_by_name ?? c.redeemed_by ?? 'someone';
-    const horse = c.redeemed_horse_name ?? c.redeemed_horse_id ?? 'a horse';
-    return `redeemed by ${esc(who)} on ${esc(horse)}`;
-  }
-  if (Date.parse(c.expires_at) <= Date.now()) return 'expired';
-  return 'outstanding';
+  if (c.redeemed_count >= c.max_redemptions) return `${c.redeemed_count} / ${c.max_redemptions} · spent`;
+  if (Date.parse(c.expires_at) <= Date.now()) return `${c.redeemed_count} / ${c.max_redemptions} · expired`;
+  return `${c.redeemed_count} / ${c.max_redemptions} redeemed`;
 }
 
 function rowHtml(c: AdminClaim): string {
-  const hat = hatById(c.hat_id);
-  const variantSuffix = c.variant !== undefined ? ` #${c.variant + 1}` : '';
-  const name = hat ? `${hat.name}${variantSuffix}` : c.hat_id;
-  return `<tr>
+  return `<tr data-code="${esc(c.code)}">
     <td><code>${esc(formatClaimCode(c.code))}</code></td>
-    <td>${esc(name)}</td>
+    <td>${esc(entrySummary(c))}</td>
     <td class="muted">${esc(c.created_at.slice(0, 10))}</td>
     <td class="muted">${esc(c.expires_at.slice(0, 10))}</td>
-    <td>${statusOf(c)}</td>
+    <td>${esc(statusOf(c))}${c.redeemed_count > 0 ? ' <button type="button" class="claim-drill">who?</button>' : ''}</td>
   </tr>`;
 }
 
 export function renderClaims(root: HTMLElement, deps: ClaimsDeps): void {
   root.innerHTML = `
     <form class="claim-form" autocomplete="off">
-      <label>Hat <select class="claim-hat">${grouped()}</select></label>
-      <label class="claim-variant-wrap">Variant <select class="claim-variant"></select></label>
+      <div class="claim-entries"></div>
+      <button type="button" class="claim-entry-add">+ Add hat</button>
+      <label>Max claims <input class="claim-max" type="number" min="1" max="${MAX_CLAIM_REDEMPTIONS}" value="1"></label>
       <label>Expires in <input class="claim-days" type="number" min="1" max="365" value="${DEFAULT_CLAIM_EXPIRY_DAYS}"> days</label>
       <button type="button" class="claim-generate">Generate</button>
     </form>
@@ -64,24 +78,36 @@ export function renderClaims(root: HTMLElement, deps: ClaimsDeps): void {
   const formEl = root.querySelector<HTMLFormElement>('.claim-form')!;
   formEl.addEventListener('submit', (e) => e.preventDefault());
 
-  const hatSel = root.querySelector<HTMLSelectElement>('.claim-hat')!;
-  const variantWrap = root.querySelector<HTMLElement>('.claim-variant-wrap')!;
-  const variantSel = root.querySelector<HTMLSelectElement>('.claim-variant')!;
   const daysEl = root.querySelector<HTMLInputElement>('.claim-days')!;
   const resultEl = root.querySelector<HTMLElement>('.claim-result')!;
   const codeEl = root.querySelector<HTMLInputElement>('.claim-code')!;
   const listEl = root.querySelector<HTMLElement>('.claim-list')!;
+  const entriesEl = root.querySelector<HTMLElement>('.claim-entries')!;
 
-  const syncVariants = () => {
-    const hat: Hat | undefined = hatById(hatSel.value);
+  const syncRow = (row: HTMLElement) => {
+    const hat: Hat | undefined = hatById(row.querySelector<HTMLSelectElement>('.claim-hat')!.value);
+    const variantSel = row.querySelector<HTMLSelectElement>('.claim-variant')!;
     const animated = !hat || isAnimatedHat(hat);
-    variantWrap.hidden = animated;
-    variantSel.innerHTML = hat && !isAnimatedHat(hat)
-      ? hat.variants.map((_, i) => `<option value="${i}">#${i + 1}</option>`).join('')
-      : '';
+    variantSel.hidden = animated;
+    variantSel.innerHTML = animated ? '' : [
+      '<option value="">Any</option>',
+      ...(hat as VariantHat).variants.map((_, i) => `<option value="${i}">#${i + 1}</option>`),
+    ].join('');
   };
-  hatSel.addEventListener('change', syncVariants);
-  syncVariants();
+
+  const addRow = () => {
+    entriesEl.insertAdjacentHTML('beforeend', entryRowHtml());
+    const row = entriesEl.lastElementChild as HTMLElement;
+    row.querySelector<HTMLSelectElement>('.claim-hat')!.addEventListener('change', () => syncRow(row));
+    row.querySelector<HTMLButtonElement>('.claim-entry-remove')!.addEventListener('click', () => {
+      // The form is meaningless with no hats, so the last row is permanent.
+      if (entriesEl.querySelectorAll('.claim-entry').length > 1) row.remove();
+    });
+    syncRow(row);
+  };
+
+  addRow();
+  root.querySelector<HTMLButtonElement>('.claim-entry-add')!.addEventListener('click', addRow);
 
   const unauthorized = (e: unknown) => {
     if (e && typeof e === 'object' && (e as { status?: number }).status === 401) {
@@ -103,18 +129,49 @@ export function renderClaims(root: HTMLElement, deps: ClaimsDeps): void {
     }
   };
 
+  const redemptionRow = (r: AdminClaimRedemption): string => {
+    const who = r.user_name ?? r.user_id;
+    const horse = r.horse_name ?? r.horse_id;
+    const what = r.outcome === 'duplicate' ? `duplicate · +${r.xp_awarded ?? 0} XP` : 'hat';
+    return `<li>${esc(who)} on ${esc(horse)} — ${esc(what)} <span class="muted">${esc(r.redeemed_at.slice(0, 10))}</span></li>`;
+  };
+
+  listEl.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.claim-drill');
+    if (!btn) return;
+    const tr = btn.closest('tr') as HTMLTableRowElement;
+    const existing = tr.nextElementSibling;
+    // Second click collapses, so the tally stays readable on a long list.
+    if (existing?.classList.contains('claim-detail')) { existing.remove(); return; }
+    void (async () => {
+      try {
+        const { redemptions } = await deps.fetchRedemptions(tr.dataset.code!);
+        tr.insertAdjacentHTML('afterend',
+          `<tr class="claim-detail"><td colspan="5"><ul>${redemptions.map(redemptionRow).join('')}</ul></td></tr>`);
+      } catch (err) {
+        if (unauthorized(err)) return;
+        tr.insertAdjacentHTML('afterend',
+          `<tr class="claim-detail"><td colspan="5" class="muted">Could not load redemptions.</td></tr>`);
+      }
+    })();
+  });
+
   const generateBtn = root.querySelector<HTMLButtonElement>('.claim-generate')!;
   generateBtn.addEventListener('click', () => {
     void (async () => {
       generateBtn.setAttribute('disabled', 'true');
       try {
-        const hat = hatById(hatSel.value);
+        const entries: ClaimEntry[] = Array.from(entriesEl.querySelectorAll<HTMLElement>('.claim-entry')).map(row => {
+          const hat_id = row.querySelector<HTMLSelectElement>('.claim-hat')!.value;
+          const raw = row.querySelector<HTMLSelectElement>('.claim-variant')!.value;
+          return raw === '' ? { hat_id } : { hat_id, variant: Number(raw) };
+        });
         const body: CreateClaimRequest = {
           item_type: 'hat',
-          hat_id: hatSel.value,
+          entries,
+          max_redemptions: Number(root.querySelector<HTMLInputElement>('.claim-max')!.value),
           expires_in_days: Number(daysEl.value),
         };
-        if (hat && !isAnimatedHat(hat)) body.variant = Number(variantSel.value);
         try {
           const created = await deps.createClaim(body);
           codeEl.value = formatClaimCode(created.code);

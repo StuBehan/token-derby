@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { renderClaims } from '../src/render/claims.js';
 import { HATS } from '@token-derby/shared';
-import type { AdminClaim } from '@token-derby/shared';
+import type { AdminClaim, CreateClaimRequest } from '@token-derby/shared';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const realStylesheet = readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
@@ -17,8 +17,11 @@ function deps(overrides: Partial<Parameters<typeof renderClaims>[1]> = {}) {
     fetchClaims: vi.fn(async () => ({ claims: [] as AdminClaim[] })),
     createClaim: vi.fn(async () => ({
       code: 'ABCDEFGHJKLM', item_type: 'hat' as const,
-      hat_id: COMMON.id, variant: 0, expires_at: '2026-09-17T00:00:00.000Z',
+      entries: [{ hat_id: COMMON.id, variant: 0 }],
+      max_redemptions: 1,
+      expires_at: '2026-09-17T00:00:00.000Z',
     })),
+    fetchRedemptions: vi.fn(async () => ({ redemptions: [] })),
     onUnauthorized: vi.fn(),
     ...overrides,
   };
@@ -61,7 +64,7 @@ describe('renderClaims', () => {
     const root = document.createElement('div');
     renderClaims(root, deps());
     await flush();
-    const opt = [...root.querySelectorAll<HTMLOptionElement>('.claim-hat option')]
+    const opt = Array.from(root.querySelectorAll<HTMLOptionElement>('.claim-hat option'))
       .find(o => o.value === 'contributor_cap');
     expect(opt).toBeDefined();
     expect(opt!.textContent).toContain('(exclusive)');
@@ -72,16 +75,16 @@ describe('renderClaims', () => {
     renderClaims(root, deps());
     await flush();
     const hatSel = root.querySelector<HTMLSelectElement>('.claim-hat')!;
-    const variantWrap = root.querySelector<HTMLElement>('.claim-variant-wrap')!;
+    const variantSel = root.querySelector<HTMLSelectElement>('.claim-variant')!;
     hatSel.value = LEGENDARY.id;
     hatSel.dispatchEvent(new Event('change'));
-    expect(variantWrap.hidden).toBe(true);
+    expect(variantSel.hidden).toBe(true);
     hatSel.value = COMMON.id;
     hatSel.dispatchEvent(new Event('change'));
-    expect(variantWrap.hidden).toBe(false);
+    expect(variantSel.hidden).toBe(false);
   });
 
-  it('populates variant options from the chosen hat', async () => {
+  it('populates variant options from the chosen hat, with Any first', async () => {
     const root = document.createElement('div');
     renderClaims(root, deps());
     await flush();
@@ -89,23 +92,9 @@ describe('renderClaims', () => {
     hatSel.value = COMMON.id;
     hatSel.dispatchEvent(new Event('change'));
     const variantSel = root.querySelector<HTMLSelectElement>('.claim-variant')!;
-    expect(variantSel.options).toHaveLength((COMMON as any).variants.length);
-  });
-
-  it('posts the chosen hat and variant, omitting variant for legendary', async () => {
-    const root = document.createElement('div');
-    const d = deps();
-    renderClaims(root, d);
-    await flush();
-    const hatSel = root.querySelector<HTMLSelectElement>('.claim-hat')!;
-    hatSel.value = LEGENDARY.id;
-    hatSel.dispatchEvent(new Event('change'));
-    root.querySelector<HTMLButtonElement>('.claim-generate')!.click();
-    await flush();
-    expect(d.createClaim).toHaveBeenCalledWith(
-      expect.objectContaining({ item_type: 'hat', hat_id: LEGENDARY.id, expires_in_days: 30 }),
-    );
-    expect(d.createClaim.mock.calls[0]![0]).not.toHaveProperty('variant');
+    expect(variantSel.options).toHaveLength((COMMON as any).variants.length + 1);
+    expect(variantSel.options[0]!.value).toBe('');
+    expect(variantSel.options[0]!.textContent).toBe('Any');
   });
 
   it('shows the minted code grouped for copying', async () => {
@@ -117,21 +106,21 @@ describe('renderClaims', () => {
     expect(root.querySelector<HTMLInputElement>('.claim-code')!.value).toBe('ABCD-EFGH-JKLM');
   });
 
-  it('renders redemption status and escapes names', async () => {
+  it('shows claim status text for outstanding, spent and expired claims', async () => {
     const claims: AdminClaim[] = [
       {
-        code: 'ABCDEFGHJKLM', item_type: 'hat', hat_id: COMMON.id, variant: 0,
-        created_at: '2026-08-01T00:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z',
-        redeemed_at: '2026-08-02T00:00:00.000Z', redeemed_by: 'u-1',
-        redeemed_by_name: '<script>x</script>', redeemed_horse_id: 'sh-1',
-        redeemed_horse_name: '<img src=x onerror=alert(1)>', outcome: 'hat',
-      },
-      {
-        code: 'MLKJHGFEDCBA', item_type: 'hat', hat_id: COMMON.id, variant: 0,
+        code: 'ABCDEFGHJKLM', item_type: 'hat', entries: [{ hat_id: COMMON.id, variant: 0 }],
+        max_redemptions: 5, redeemed_count: 2,
         created_at: '2026-08-01T00:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z',
       },
       {
-        code: 'AAAABBBBCCCC', item_type: 'hat', hat_id: COMMON.id, variant: 0,
+        code: 'MLKJHGFEDCBA', item_type: 'hat', entries: [{ hat_id: COMMON.id, variant: 0 }],
+        max_redemptions: 1, redeemed_count: 1,
+        created_at: '2026-08-01T00:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z',
+      },
+      {
+        code: 'AAAABBBBCCCC', item_type: 'hat', entries: [{ hat_id: COMMON.id, variant: 0 }],
+        max_redemptions: 5, redeemed_count: 0,
         created_at: '2020-01-01T00:00:00.000Z', expires_at: '2020-02-01T00:00:00.000Z',
       },
     ];
@@ -139,8 +128,30 @@ describe('renderClaims', () => {
     renderClaims(root, deps({ fetchClaims: vi.fn(async () => ({ claims })) }));
     await flush();
     const html = root.innerHTML;
-    expect(html).toContain('outstanding');
-    expect(html).toContain('expired');
+    expect(html).toContain('2 / 5 redeemed');
+    expect(html).toContain('1 / 1 · spent');
+    expect(html).toContain('0 / 5 · expired');
+  });
+
+  it('escapes redeemer and horse names in the drill-down', async () => {
+    const fetchRedemptions = vi.fn(async () => ({ redemptions: [{
+      user_id: 'u-1', user_name: '<script>x</script>', horse_id: 'sh-1',
+      horse_name: '<img src=x onerror=alert(1)>', redeemed_at: '2026-08-02T00:00:00.000Z',
+      outcome: 'hat' as const, hat_id: COMMON.id, variant: 0,
+    }] }));
+    const root = document.createElement('div');
+    renderClaims(root, deps({
+      fetchRedemptions,
+      fetchClaims: vi.fn(async () => ({ claims: [{
+        code: 'ABCDEFGHJKLM', item_type: 'hat' as const, entries: [{ hat_id: COMMON.id, variant: 0 }],
+        max_redemptions: 5, redeemed_count: 1,
+        created_at: '2026-08-01T00:00:00.000Z', expires_at: '2099-01-01T00:00:00.000Z',
+      }] })),
+    }));
+    await flush();
+    root.querySelector<HTMLButtonElement>('.claim-drill')!.click();
+    await flush();
+    const html = root.querySelector('.claim-detail')!.innerHTML;
     expect(html).not.toContain('<script>x</script>');
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<img src=x onerror=alert(1)>');
@@ -168,7 +179,8 @@ describe('renderClaims', () => {
     await flush();
     expect(createClaim).toHaveBeenCalledTimes(1);
     resolveCreate({
-      code: 'ABCDEFGHJKLM', item_type: 'hat', hat_id: COMMON.id, variant: 0,
+      code: 'ABCDEFGHJKLM', item_type: 'hat',
+      entries: [{ hat_id: COMMON.id, variant: 0 }], max_redemptions: 1,
       expires_at: '2026-09-17T00:00:00.000Z',
     });
     await flush();
@@ -193,11 +205,11 @@ describe('renderClaims', () => {
       expect(getComputedStyle(resultEl).display).toBe('none');
 
       const hatSel = root.querySelector<HTMLSelectElement>('.claim-hat')!;
-      const variantWrap = root.querySelector<HTMLElement>('.claim-variant-wrap')!;
+      const variantSel = root.querySelector<HTMLSelectElement>('.claim-variant')!;
       hatSel.value = LEGENDARY.id;
       hatSel.dispatchEvent(new Event('change'));
-      expect(variantWrap.hidden).toBe(true);
-      expect(getComputedStyle(variantWrap).display).toBe('none');
+      expect(variantSel.hidden).toBe(true);
+      expect(getComputedStyle(variantSel).display).toBe('none');
 
       root.querySelector<HTMLButtonElement>('.claim-generate')!.click();
       await flush();
@@ -219,5 +231,117 @@ describe('renderClaims', () => {
     const submitted = form.dispatchEvent(new Event('submit', { cancelable: true }));
     expect(submitted).toBe(false);
     expect(root.querySelector<HTMLInputElement>('.claim-code')!.value).toBe('ABCD-EFGH-JKLM');
+  });
+});
+
+describe('pack builder', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  function mounted(overrides: Partial<Parameters<typeof renderClaims>[1]> = {}) {
+    const root = document.createElement('div');
+    renderClaims(root, deps(overrides));
+    return root;
+  }
+
+  it('starts with a single entry row', () => {
+    expect(mounted().querySelectorAll('.claim-entry')).toHaveLength(1);
+  });
+
+  it('adds and removes entry rows', () => {
+    const root = mounted();
+    root.querySelector<HTMLButtonElement>('.claim-entry-add')!.click();
+    expect(root.querySelectorAll('.claim-entry')).toHaveLength(2);
+    root.querySelectorAll<HTMLButtonElement>('.claim-entry-remove')[1]!.click();
+    expect(root.querySelectorAll('.claim-entry')).toHaveLength(1);
+  });
+
+  it('never removes the last entry row', () => {
+    const root = mounted();
+    root.querySelector<HTMLButtonElement>('.claim-entry-remove')!.click();
+    expect(root.querySelectorAll('.claim-entry')).toHaveLength(1);
+  });
+
+  it('sends every entry and the redemption limit', async () => {
+    const createClaim = vi.fn(async (_body: CreateClaimRequest) => ({
+      code: 'ABCDEFGHJKLM', item_type: 'hat' as const,
+      entries: [], max_redemptions: 1, expires_at: '2026-09-17T00:00:00.000Z',
+    }));
+    const root = mounted({ createClaim });
+    root.querySelector<HTMLButtonElement>('.claim-entry-add')!.click();
+    root.querySelector<HTMLInputElement>('.claim-max')!.value = '25';
+    root.querySelector<HTMLButtonElement>('.claim-generate')!.click();
+    await flush();
+    expect(createClaim.mock.calls[0]![0].entries).toHaveLength(2);
+    expect(createClaim.mock.calls[0]![0].max_redemptions).toBe(25);
+  });
+
+  it('omits the variant when the entry is set to Any', async () => {
+    const createClaim = vi.fn(async (_body: CreateClaimRequest) => ({
+      code: 'ABCDEFGHJKLM', item_type: 'hat' as const,
+      entries: [], max_redemptions: 1, expires_at: '2026-09-17T00:00:00.000Z',
+    }));
+    const root = mounted({ createClaim });
+    root.querySelector<HTMLSelectElement>('.claim-variant')!.value = '';
+    root.querySelector<HTMLButtonElement>('.claim-generate')!.click();
+    await flush();
+    expect(createClaim.mock.calls[0]![0].entries[0]!.variant).toBeUndefined();
+  });
+
+  it('offers the limited optgroup', () => {
+    const labels = Array.from(mounted().querySelectorAll('optgroup')).map(g => g.getAttribute('label'));
+    expect(labels).toContain('limited');
+  });
+
+  it('shows a pack summary and the redemption tally in the list', async () => {
+    const root = mounted({
+      fetchClaims: vi.fn(async () => ({ claims: [{
+        code: 'ABCDEFGHJKLM', item_type: 'hat' as const,
+        entries: [{ hat_id: COMMON.id, variant: 0 }, { hat_id: LEGENDARY.id }],
+        max_redemptions: 10, redeemed_count: 3,
+        created_at: '2026-09-01T00:00:00.000Z', expires_at: '2026-12-01T00:00:00.000Z',
+      }] })),
+    });
+    await flush();
+    const text = root.querySelector('.claim-list')!.textContent!;
+    expect(text).toContain('Pack of 2');
+    expect(text).toContain('3 / 10');
+  });
+
+  it('names the single hat rather than calling it a pack of one', async () => {
+    const root = mounted({
+      fetchClaims: vi.fn(async () => ({ claims: [{
+        code: 'ABCDEFGHJKLM', item_type: 'hat' as const,
+        entries: [{ hat_id: COMMON.id, variant: 0 }],
+        max_redemptions: 1, redeemed_count: 0,
+        created_at: '2026-09-01T00:00:00.000Z', expires_at: '2026-12-01T00:00:00.000Z',
+      }] })),
+    });
+    await flush();
+    const text = root.querySelector('.claim-list')!.textContent!;
+    expect(text).toContain(`${COMMON.name} #1`);
+    expect(text).not.toContain('Pack of');
+  });
+
+  it('loads redemptions on demand when the tally is drilled into', async () => {
+    const fetchRedemptions = vi.fn(async () => ({ redemptions: [{
+      user_id: 'u-1', user_name: 'Omar', horse_id: 'sh-1', horse_name: 'Thunderbolt',
+      redeemed_at: '2026-09-02T00:00:00.000Z', outcome: 'hat' as const,
+      hat_id: COMMON.id, variant: 0,
+    }] }));
+    const root = mounted({
+      fetchRedemptions,
+      fetchClaims: vi.fn(async () => ({ claims: [{
+        code: 'ABCDEFGHJKLM', item_type: 'hat' as const,
+        entries: [{ hat_id: COMMON.id, variant: 0 }],
+        max_redemptions: 5, redeemed_count: 1,
+        created_at: '2026-09-01T00:00:00.000Z', expires_at: '2026-12-01T00:00:00.000Z',
+      }] })),
+    });
+    await flush();
+    expect(fetchRedemptions).not.toHaveBeenCalled();
+    root.querySelector<HTMLButtonElement>('.claim-drill')!.click();
+    await flush();
+    expect(fetchRedemptions).toHaveBeenCalledWith('ABCDEFGHJKLM');
+    expect(root.querySelector('.claim-detail')!.textContent).toContain('Thunderbolt');
   });
 });
