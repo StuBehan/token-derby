@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { makeUser, makeHorse, type TestUser } from '../helpers/auth-helper.js';
 import { CURRENT_CLI_VERSION } from '../helpers/cli-version.js';
-import { putClaim, getClaim } from '../../src/db/claims.js';
+import { putClaim, getClaim, getClaimRedemption } from '../../src/db/claims.js';
 import { generateClaimCode } from '../../src/lib/claim-code.js';
 import { formatClaimCode } from '@token-derby/shared';
 import { getStableHorse, deleteStableHorse, awardHorseXp, appendStableHorseHat } from '../../src/db/stable.js';
@@ -32,7 +32,11 @@ function future(days = 30) { return new Date(Date.now() + days * 86_400_000).toI
 function past() { return new Date(Date.now() - 86_400_000).toISOString(); }
 
 async function seedClaim(hat_id = 'flat_cap', variant: number | undefined = 0, expires_at = future()) {
-  return putClaim({ code: generateClaimCode(), item_type: 'hat', hat_id, variant, expires_at, created_by: 'admin' });
+  const entry = variant === undefined ? { hat_id } : { hat_id, variant };
+  return putClaim({
+    code: generateClaimCode(), item_type: 'hat', entries: [entry],
+    max_redemptions: 1, expires_at, created_by: 'admin',
+  });
 }
 
 describe('get-claim probe', () => {
@@ -82,7 +86,11 @@ describe('get-claim probe', () => {
   it('409s an already-redeemed claim', async () => {
     const user = await makeUser('Probe_Spent');
     const horse = await makeHorse(user, 'Gary');
-    const claim = await seedClaim();
+    // max_redemptions: 2 so this hits the per-user check, not exhaustion.
+    const claim = await putClaim({
+      code: generateClaimCode(), item_type: 'hat', entries: [{ hat_id: 'flat_cap', variant: 0 }],
+      max_redemptions: 2, expires_at: future(), created_by: 'admin',
+    });
     await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
     const res = await probe(ev(user, claim.code));
     expect(res.statusCode).toBe(409);
@@ -127,10 +135,11 @@ describe('redeem-claim', () => {
     const claim = await seedClaim();
     await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
     const after = await getClaim(claim.code);
-    expect(after?.redeemed_by).toBe(user.user_id);
-    expect(after?.redeemed_horse_id).toBe(horse.stable_horse_id);
-    expect(after?.redeemed_horse_name).toBe('Dash');
-    expect(after?.outcome).toBe('hat');
+    expect(after?.redeemed_count).toBe(1);
+    const redemption = await getClaimRedemption(claim.code, user.user_id);
+    expect(redemption?.horse_id).toBe(horse.stable_horse_id);
+    expect(redemption?.horse_name).toBe('Dash');
+    expect(redemption?.outcome).toBe('hat');
   });
 
   it('pays XP instead of a second copy on a duplicate', async () => {
@@ -157,11 +166,27 @@ describe('redeem-claim', () => {
   it('refuses a second redemption', async () => {
     const user = await makeUser('Redeem_Twice');
     const horse = await makeHorse(user, 'Gary');
-    const claim = await seedClaim();
+    // max_redemptions: 2 so this hits the per-user check, not exhaustion.
+    const claim = await putClaim({
+      code: generateClaimCode(), item_type: 'hat', entries: [{ hat_id: 'flat_cap', variant: 0 }],
+      max_redemptions: 2, expires_at: future(), created_by: 'admin',
+    });
     expect((await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }))).statusCode).toBe(200);
     const second = await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
     expect(second.statusCode).toBe(409);
     expect(body(second).code).toBe('CLAIM_ALREADY_REDEEMED');
+    const after = await getStableHorse(user.user_id, horse.stable_horse_id);
+    expect(after?.hats).toHaveLength(1);
+  });
+
+  it('exhausts a single-slot claim on the redeemer\'s own second attempt', async () => {
+    const user = await makeUser('Redeem_TwiceExhausted');
+    const horse = await makeHorse(user, 'Gary');
+    const claim = await seedClaim();
+    expect((await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }))).statusCode).toBe(200);
+    const second = await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
+    expect(second.statusCode).toBe(409);
+    expect(body(second).code).toBe('CLAIM_EXHAUSTED');
     const after = await getStableHorse(user.user_id, horse.stable_horse_id);
     expect(after?.hats).toHaveLength(1);
   });
@@ -186,7 +211,7 @@ describe('redeem-claim', () => {
     const claim = await seedClaim('flat_cap', 0, past());
     const res = await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
     expect(res.statusCode).toBe(410);
-    expect((await getClaim(claim.code))?.redeemed_at).toBeUndefined();
+    expect((await getClaim(claim.code))?.redeemed_count).toBe(0);
   });
 
   it('404s an unknown horse without burning the token', async () => {
@@ -197,7 +222,7 @@ describe('redeem-claim', () => {
     const res = await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
     expect(res.statusCode).toBe(404);
     expect(body(res).code).toBe('STABLE_HORSE_NOT_FOUND');
-    expect((await getClaim(claim.code))?.redeemed_at).toBeUndefined();
+    expect((await getClaim(claim.code))?.redeemed_count).toBe(0);
   });
 
   it('cannot redeem onto another user\'s horse', async () => {
@@ -207,7 +232,7 @@ describe('redeem-claim', () => {
     const claim = await seedClaim();
     const res = await redeem(ev(thief, claim.code, { stable_horse_id: horse.stable_horse_id }));
     expect(res.statusCode).toBe(404);
-    expect((await getClaim(claim.code))?.redeemed_at).toBeUndefined();
+    expect((await getClaim(claim.code))?.redeemed_count).toBe(0);
   });
 
   it('400s a missing stable_horse_id', async () => {
