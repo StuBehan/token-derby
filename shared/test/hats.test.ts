@@ -9,9 +9,9 @@ describe('HATS catalog', () => {
   });
 
   it('has the expected rarity counts', () => {
-    const counts = { common: 0, rare: 0, epic: 0, legendary: 0 };
+    const counts = { common: 0, rare: 0, epic: 0, legendary: 0, limited: 0 };
     for (const h of HATS) counts[h.rarity]++;
-    expect(counts).toEqual({ common: 18, rare: 10, epic: 6, legendary: 6 });
+    expect(counts).toEqual({ common: 18, rare: 10, epic: 6, legendary: 6, limited: 0 });
   });
 
   it('every hat is 11×10 with width 11', () => {
@@ -22,9 +22,9 @@ describe('HATS catalog', () => {
     }
   });
 
-  it('non-legendary hats have variants[] with ≥ 1 entry', () => {
+  it('variant hats have variants[] with ≥ 1 entry', () => {
     for (const h of HATS) {
-      if (h.rarity === 'legendary') continue;
+      if (isAnimatedHat(h)) continue;
       expect(h.variants.length).toBeGreaterThanOrEqual(1);
       for (const v of h.variants) expect(v.A).toMatch(/^#[0-9a-fA-F]{6}$/);
     }
