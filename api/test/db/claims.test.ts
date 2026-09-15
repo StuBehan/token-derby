@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
-import { putClaim, getClaim, markClaimRedeemed, listClaims } from '../../src/db/claims.js';
+import { putClaim, getClaim, listClaims } from '../../src/db/claims.js';
 import { generateClaimCode } from '../../src/lib/claim-code.js';
 import { ddb, TABLE } from '../../src/db/client.js';
 import { claimKey } from '../../src/db/keys.js';
@@ -54,56 +54,6 @@ describe('claim persistence', () => {
 
   it('returns null for an unknown code', async () => {
     expect(await getClaim(generateClaimCode())).toBeNull();
-  });
-
-  it('stamps a redemption and reports success', async () => {
-    const created = await seed();
-    const ok = await markClaimRedeemed(created.code, {
-      redeemed_by: 'u-1',
-      redeemed_by_name: 'Omar',
-      redeemed_horse_id: 'sh-1',
-      redeemed_horse_name: 'Gary',
-      outcome: 'hat',
-    });
-    expect(ok).toBe(true);
-    const read = await getClaim(created.code);
-    expect(read?.redeemed_by).toBe('u-1');
-    expect(read?.redeemed_horse_name).toBe('Gary');
-    expect(read?.outcome).toBe('hat');
-    expect(read?.redeemed_at).toBeTruthy();
-  });
-
-  it('refuses a second redemption', async () => {
-    const created = await seed();
-    const first = await markClaimRedeemed(created.code, {
-      redeemed_by: 'u-1', redeemed_horse_id: 'sh-1', outcome: 'hat',
-    });
-    const second = await markClaimRedeemed(created.code, {
-      redeemed_by: 'u-2', redeemed_horse_id: 'sh-2', outcome: 'hat',
-    });
-    expect(first).toBe(true);
-    expect(second).toBe(false);
-    const read = await getClaim(created.code);
-    expect(read?.redeemed_by).toBe('u-1');
-  });
-
-  it('lets exactly one of ten concurrent redemptions win', async () => {
-    const created = await seed();
-    const results = await Promise.all(
-      Array.from({ length: 10 }, (_, i) =>
-        markClaimRedeemed(created.code, {
-          redeemed_by: `u-${i}`, redeemed_horse_id: `sh-${i}`, outcome: 'hat',
-        }),
-      ),
-    );
-    expect(results.filter(Boolean)).toHaveLength(1);
-  });
-
-  it('reports false for an unknown code', async () => {
-    const ok = await markClaimRedeemed(generateClaimCode(), {
-      redeemed_by: 'u-1', redeemed_horse_id: 'sh-1', outcome: 'hat',
-    });
-    expect(ok).toBe(false);
   });
 
   it('lists created claims', async () => {

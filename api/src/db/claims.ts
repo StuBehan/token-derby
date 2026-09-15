@@ -1,7 +1,7 @@
-import { PutCommand, GetCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import type { ClaimItemType, ClaimEntry } from '@token-derby/shared';
+import { PutCommand, GetCommand, ScanCommand, TransactWriteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import type { ClaimItemType, ClaimEntry, AdminClaimRedemption } from '@token-derby/shared';
 import { ddb, TABLE } from './client.js';
-import { claimKey, CLAIM_PK_PREFIX } from './keys.js';
+import { claimKey, CLAIM_PK_PREFIX, claimRedemptionKey, CLAIM_REDEMPTION_SK_PREFIX } from './keys.js';
 
 export type ClaimRecord = {
   code: string;
@@ -78,60 +78,110 @@ export async function getClaim(code: string): Promise<ClaimRecord | null> {
   return Item ? toRecord(Item) : null;
 }
 
-export type MarkRedeemedInput = {
-  redeemed_by: string;
-  redeemed_by_name?: string;
-  redeemed_horse_id: string;
-  redeemed_horse_name?: string;
+export type RedemptionInput = {
+  user_id: string;
+  user_name?: string;
+  horse_id: string;
+  horse_name?: string;
   outcome: 'hat' | 'duplicate';
+  hat_id: string;
+  variant?: number;
   xp_awarded?: number;
 };
 
+export type SlotResult = 'won' | 'already_redeemed' | 'exhausted';
+
+function compact(o: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+}
+
 /**
- * Single-use gate. The conditional update is the only thing guaranteeing one
- * award per token; returns false when the row is missing or already redeemed.
+ * The single-use gate. Both conditions are one transaction: the Put claims
+ * this user's slot, the Update claims one of the limited slots. Neither
+ * applies unless both hold, so concurrent redeemers cannot overshoot.
  */
-export async function markClaimRedeemed(
-  code: string,
-  input: MarkRedeemedInput,
-): Promise<boolean> {
-  const sets = [
-    'redeemed_at = :at',
-    'redeemed_by = :by',
-    'redeemed_horse_id = :horse',
-    'outcome = :outcome',
-  ];
-  const eav: Record<string, unknown> = {
-    ':at': new Date().toISOString(),
-    ':by': input.redeemed_by,
-    ':horse': input.redeemed_horse_id,
-    ':outcome': input.outcome,
-  };
-  if (input.redeemed_by_name !== undefined) {
-    sets.push('redeemed_by_name = :byName');
-    eav[':byName'] = input.redeemed_by_name;
-  }
-  if (input.redeemed_horse_name !== undefined) {
-    sets.push('redeemed_horse_name = :horseName');
-    eav[':horseName'] = input.redeemed_horse_name;
-  }
-  if (input.xp_awarded !== undefined) {
-    sets.push('xp_awarded = :xp');
-    eav[':xp'] = input.xp_awarded;
-  }
+export async function redeemClaimSlot(
+  claim: ClaimRecord,
+  input: RedemptionInput,
+): Promise<SlotResult> {
+  const item = compact({
+    ...claimRedemptionKey(claim.code, input.user_id),
+    ...input,
+    redeemed_at: new Date().toISOString(),
+    ttl: claimTtl(claim.expires_at),
+  });
   try {
-    await ddb.send(new UpdateCommand({
-      TableName: TABLE,
-      Key: claimKey(code),
-      UpdateExpression: 'SET ' + sets.join(', '),
-      ConditionExpression: 'attribute_exists(pk) AND attribute_not_exists(redeemed_at)',
-      ExpressionAttributeValues: eav,
+    await ddb.send(new TransactWriteCommand({
+      TransactItems: [
+        {
+          Put: {
+            TableName: TABLE,
+            Item: item,
+            ConditionExpression: 'attribute_not_exists(pk)',
+          },
+        },
+        {
+          Update: {
+            TableName: TABLE,
+            Key: claimKey(claim.code),
+            UpdateExpression: 'SET redeemed_count = if_not_exists(redeemed_count, :zero) + :one',
+            // if_not_exists() is an update-expression-only function; a
+            // condition expression must spell the same default-to-0 as OR.
+            ConditionExpression:
+              'attribute_exists(pk) AND attribute_not_exists(redeemed_at) '
+              + 'AND (attribute_not_exists(redeemed_count) OR redeemed_count < :max)',
+            ExpressionAttributeValues: {
+              ':zero': 0,
+              ':one': 1,
+              ':max': claim.max_redemptions,
+            },
+          },
+        },
+      ],
     }));
-    return true;
+    return 'won';
   } catch (e: any) {
-    if (e?.name === 'ConditionalCheckFailedException') return false;
+    if (e?.name !== 'TransactionCanceledException') throw e;
+    const reasons = e.CancellationReasons ?? [];
+    if (reasons[0]?.Code === 'ConditionalCheckFailed') return 'already_redeemed';
+    if (reasons[1]?.Code === 'ConditionalCheckFailed') return 'exhausted';
     throw e;
   }
+}
+
+function toRedemption(item: Record<string, unknown>): AdminClaimRedemption {
+  const { pk, sk, ttl, ...rest } = item;
+  return rest as AdminClaimRedemption;
+}
+
+export async function getClaimRedemption(
+  code: string,
+  user_id: string,
+): Promise<AdminClaimRedemption | null> {
+  const { Item } = await ddb.send(new GetCommand({
+    TableName: TABLE,
+    Key: claimRedemptionKey(code, user_id),
+  }));
+  return Item ? toRedemption(Item) : null;
+}
+
+export async function listClaimRedemptions(code: string): Promise<AdminClaimRedemption[]> {
+  const out: AdminClaimRedemption[] = [];
+  let ExclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const res = await ddb.send(new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `${CLAIM_PK_PREFIX}${code}`,
+        ':sk': CLAIM_REDEMPTION_SK_PREFIX,
+      },
+      ExclusiveStartKey,
+    }));
+    for (const item of res.Items ?? []) out.push(toRedemption(item));
+    ExclusiveStartKey = res.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return out.sort((a, b) => a.redeemed_at.localeCompare(b.redeemed_at));
 }
 
 /** Admin listing. Claims are rare, so a filtered Scan is acceptable here. */
