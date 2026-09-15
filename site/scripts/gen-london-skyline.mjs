@@ -457,6 +457,37 @@ function drawPhoneBox(c, x, yBase) {
   c.box(x, y + 34, 14, 4, BASE);              // plinth
 }
 
+// ── Rain ───────────────────────────────────────────────────────────────────
+// One tile of streaks, shown at three scales in the shared .rain-backdrop the
+// Matrix theme also uses. Two things make it tile seamlessly:
+//
+//   - Every streak wraps in BOTH axes (the modulo on plot), so one that runs
+//     off an edge comes back on the opposite one and the tile has no border.
+//   - The slope is exactly 1 across for 4 down, which is the same ratio as the
+//     tile's width to its height. The layer travels one tile width sideways per
+//     tile height down, so the streaks move ALONG their own axis. Get this
+//     wrong and the rain visibly crabs sideways as it falls.
+function rainTile() {
+  const W = 120, H = 480;
+  const c = canvas(W, H);
+  const rand = rng(5150);
+  // Three shades rather than one: near drops read brighter than far ones, and
+  // a single flat colour makes the sheet look like a screen door.
+  const SHADES = [20, 21, 22];
+  Object.assign(PALETTE, { 20: '#7e97b5', 21: '#aac1da', 22: '#d7e5f4' });
+
+  for (let i = 0; i < 30; i++) {
+    const x0 = Math.floor(rand() * W);
+    const y0 = Math.floor(rand() * H);
+    const len = 16 + Math.floor(rand() * 30);
+    const shade = SHADES[Math.floor(rand() * SHADES.length)];
+    for (let k = 0; k < len; k++) {
+      c.plot((((x0 - ((k / 4) | 0)) % W) + W) % W, (y0 + k) % H, shade);
+    }
+  }
+  return toSvg(c);
+}
+
 // ── Victorian street lamps ─────────────────────────────────────────────────
 // A tile holding one lamp, repeated along the near kerb. The tile's width IS
 // the spacing between lamps, and it is deliberately wide: these stand in FRONT
@@ -556,6 +587,7 @@ function bus() {
 writeFileSync(join(IMG, 'london-skyline.svg'), skyline());
 writeFileSync(join(IMG, 'london-bridge.svg'), roadway());
 writeFileSync(join(IMG, 'london-lamp.svg'), streetLamps());
+writeFileSync(join(IMG, 'london-rain.svg'), rainTile());
 writeFileSync(join(IMG, 'london-rooftops.svg'), rooftops());
 writeFileSync(join(IMG, 'london-bus.svg'), bus());
-console.log('wrote london-skyline, -bridge, -lamp, -rooftops, -bus');
+console.log('wrote london-skyline, -bridge, -lamp, -rain, -rooftops, -bus');
