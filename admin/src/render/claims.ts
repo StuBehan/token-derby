@@ -63,9 +63,11 @@ export function renderClaims(root: HTMLElement, deps: ClaimsDeps): void {
     <form class="claim-form" autocomplete="off">
       <div class="claim-entries"></div>
       <button type="button" class="claim-entry-add">+ Add hat</button>
-      <label>Max claims <input class="claim-max" type="number" min="1" max="${MAX_CLAIM_REDEMPTIONS}" value="1"></label>
-      <label>Expires in <input class="claim-days" type="number" min="1" max="365" value="${DEFAULT_CLAIM_EXPIRY_DAYS}"> days</label>
-      <button type="button" class="claim-generate">Generate</button>
+      <div class="claim-controls">
+        <label>Max claims <input class="claim-max" type="number" min="1" max="${MAX_CLAIM_REDEMPTIONS}" value="1"></label>
+        <label>Expires (days) <input class="claim-days" type="number" min="1" max="365" value="${DEFAULT_CLAIM_EXPIRY_DAYS}"></label>
+        <button type="button" class="claim-generate">Generate</button>
+      </div>
     </form>
     <div class="claim-result" hidden>
       <label>Claim token <input class="claim-code" readonly></label>
