@@ -2397,6 +2397,83 @@ label.label input:disabled, label.label select:disabled, label.label textarea:di
   animation-play-state: paused;
 }
 
+
+/* Rain, in the same .rain-backdrop element Matrix uses — it is built for every
+   theme in theme.ts and hidden in CSS by whichever ones do not want it, so this
+   costs no new markup.
+
+   In FRONT of the page (z-index 3, above the fog) rather than behind it, which
+   is the opposite of Matrix. Glyph rain is a backdrop you read the page over;
+   real rain is weather between you and the thing you are looking at, and a
+   racecourse seen through it is the entire point of the theme.
+
+   Everything that matters about the performance of this is inherited from the
+   Matrix fix (PR #19): the fall is a `transform`, so each layer is rasterised
+   once and every later frame is a matrix change on the compositor. Nothing here
+   animates background-position, and nothing here is per-lane — this is one
+   fixed layer for the whole page, so its cost does not grow with the field. */
+:root[data-theme="london"] .rain-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+  /* Low, because this sheet crosses live text. Tuned against the horse names at
+     the left of the track, which are the smallest thing it has to stay behind;
+     at 0.5 the streaks started competing with them rather than sitting behind. */
+  opacity: 0.32;
+}
+/* Each layer carries a tile of headroom on the two edges it travels away from —
+   above, and to the right — so that after moving exactly one tile in each axis
+   it still covers the screen and the pattern lands back on itself. The loop is
+   invisible without the layer ever being redrawn. */
+:root[data-theme="london"] .rain-backdrop > i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  background-image: url('img/london-rain.svg');
+  background-repeat: repeat;
+}
+/* One tile at three scales, each travelling its own size over the same
+   duration — which is where the parallax comes from. The x-offsets stop the
+   three landing on top of each other and showing the repeat. */
+:root[data-theme="london"] .rain-backdrop > i:nth-child(1) {
+  top: -480px;
+  right: -120px;
+  background-size: 120px 480px;
+  background-position: 0 0;
+}
+:root[data-theme="london"] .rain-backdrop > i:nth-child(2) {
+  top: -336px;
+  right: -84px;
+  background-size: 84px 336px;
+  background-position: 40px 0;
+}
+:root[data-theme="london"] .rain-backdrop > i:nth-child(3) {
+  top: -672px;
+  right: -168px;
+  background-size: 168px 672px;
+  background-position: 70px 0;
+}
+/* Down and to the left, one tile of each per cycle. The x and y distances are
+   the tile's own width and height, which is what keeps the loop seamless and
+   the streaks travelling along their own slope. */
+@keyframes london-rain-fall-1 { to { transform: translate3d(-120px, 480px, 0); } }
+@keyframes london-rain-fall-2 { to { transform: translate3d(-84px, 336px, 0); } }
+@keyframes london-rain-fall-3 { to { transform: translate3d(-168px, 672px, 0); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="london"] .rain-backdrop > i:nth-child(1) { animation: london-rain-fall-1 0.9s linear infinite; }
+  :root[data-theme="london"] .rain-backdrop > i:nth-child(2) { animation: london-rain-fall-2 0.9s linear infinite; }
+  :root[data-theme="london"] .rain-backdrop > i:nth-child(3) { animation: london-rain-fall-3 0.9s linear infinite; }
+}
+/* Same rule the crowd, the bus and the chromatic wash follow — the page stops
+   moving once the race is over. */
+:root[data-theme="london"]:has(.race.finished) .rain-backdrop > i {
+  animation-play-state: paused;
+}
+
 /* ── The city ───────────────────────────────────────────
    Two mountings for one piece of art, because the race view and everything
    else have opposite problems.

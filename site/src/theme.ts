@@ -47,7 +47,8 @@ export function applyTheme(id: ThemeId, doc: Document = document): void {
   ensureRainBackdrop(doc);
 }
 
-/** Matrix's glyph-rain backdrop, which every other theme hides in CSS.
+/** The shared rain backdrop: Matrix's falling glyphs, London's rain. Themes
+ *  that want neither hide it in CSS.
  *
  *  Built here rather than written into the page shells because there are seven
  *  of them (index plus the previews) and all of them honour the theme picker.
