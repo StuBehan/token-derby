@@ -10,11 +10,15 @@ export const handler: ApiHandler = async (event) => {
   const auth = requireAdmin(event, cfg.sessionSecret);
   if (!auth.ok) return err('UNAUTHENTICATED', 'Admin session required');
 
-  const records = await listClaims();
-  const claims: AdminClaim[] = records.map(r => {
-    const { created_by, ...rest } = r;
-    return rest as AdminClaim;
-  });
+  const claims: AdminClaim[] = (await listClaims()).map(c => ({
+    code: c.code,
+    item_type: c.item_type,
+    entries: c.entries,
+    max_redemptions: c.max_redemptions,
+    redeemed_count: c.redeemed_count,
+    created_at: c.created_at,
+    expires_at: c.expires_at,
+  }));
   const response: AdminClaimsResponse = { claims };
   return ok(response);
 };

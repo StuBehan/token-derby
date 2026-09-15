@@ -11,6 +11,14 @@ vi.mock('../../src/ui/prompt.js', () => ({
   promptYesNo: vi.fn(async () => false),
   resetStdinAfterInk: vi.fn(),
 }));
+// The picker is an Ink render; cancel it immediately so the command returns
+// without a live terminal UI. Cancelling still prints the opening line.
+vi.mock('ink', () => ({
+  render: (el: any) => {
+    queueMicrotask(() => el.props.onCancel());
+    return { unmount: vi.fn() };
+  },
+}));
 
 import { claimCommand } from '../../src/commands/claim.js';
 import { probeClaim, redeemClaim, listStable } from '../../src/api/endpoints.js';
@@ -23,7 +31,15 @@ const horse = {
   created_at: '2026-01-01T00:00:00Z', xp: 0,
 };
 
-beforeEach(() => { vi.clearAllMocks(); });
+let out: string[];
+let errs: string[];
+beforeEach(() => {
+  vi.clearAllMocks();
+  out = [];
+  errs = [];
+  vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => { out.push(a.join(' ')); });
+  vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => { errs.push(a.join(' ')); });
+});
 
 describe('claimCommand', () => {
   it('exits 2 with usage when no token is given', async () => {
@@ -44,7 +60,7 @@ describe('claimCommand', () => {
   });
 
   it('stops when the stable is empty', async () => {
-    vi.mocked(probeClaim).mockResolvedValue({ item_type: 'hat' });
+    vi.mocked(probeClaim).mockResolvedValue({ item_type: 'hat', entry_count: 1, remaining: 1 });
     vi.mocked(listStable).mockResolvedValue({ horses: [] } as any);
     expect(await claimCommand('ABCD-EFGH-JKLM')).toBe(1);
     expect(redeemClaim).not.toHaveBeenCalled();
@@ -52,9 +68,37 @@ describe('claimCommand', () => {
 
   it('probes before listing the stable', async () => {
     const order: string[] = [];
-    vi.mocked(probeClaim).mockImplementation(async () => { order.push('probe'); return { item_type: 'hat' }; });
+    vi.mocked(probeClaim).mockImplementation(async () => { order.push('probe'); return { item_type: 'hat', entry_count: 1, remaining: 1 }; });
     vi.mocked(listStable).mockImplementation(async () => { order.push('stable'); return { horses: [] } as any; });
     await claimCommand('ABCD-EFGH-JKLM');
     expect(order).toEqual(['probe', 'stable']);
+  });
+});
+
+describe('claim opening line', () => {
+  const stocked = () => vi.mocked(listStable).mockResolvedValue({ horses: [horse] } as any);
+
+  it('announces a single cosmetic for a one-entry claim', async () => {
+    vi.mocked(probeClaim).mockResolvedValue({ item_type: 'hat', entry_count: 1, remaining: 1 });
+    stocked();
+    expect(await claimCommand('ABCD-EFGH-JKLM')).toBe(0);
+    expect(out.join('\n')).toContain('A cosmetic has been awarded to you');
+  });
+
+  it('announces a pack without naming its contents', async () => {
+    vi.mocked(probeClaim).mockResolvedValue({ item_type: 'hat', entry_count: 5, remaining: 20 });
+    stocked();
+    await claimCommand('ABCD-EFGH-JKLM');
+    const joined = out.join('\n');
+    expect(joined).toContain('pack of 5');
+    expect(joined).not.toContain('flat_cap');
+  });
+
+  it('surfaces CLAIM_EXHAUSTED from the probe without listing the stable', async () => {
+    vi.mocked(probeClaim).mockRejectedValue(
+      new ApiError('CLAIM_EXHAUSTED', 'This claim token has been fully redeemed', 409));
+    expect(await claimCommand('ABCD-EFGH-JKLM')).toBe(1);
+    expect(errs.join('\n')).toContain('CLAIM_EXHAUSTED');
+    expect(listStable).not.toHaveBeenCalled();
   });
 });

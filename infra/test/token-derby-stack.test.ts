@@ -217,3 +217,13 @@ describe('org access control routes', () => {
     }
   });
 });
+
+describe('admin claim redemptions route', () => {
+  let prod: Template;
+  beforeAll(() => { prod = synth('prod'); });
+
+  it('wires GET /api/admin/claims/{code}/redemptions to its own handler', () => {
+    const fnLogicalId = routeTargetFunctionLogicalId(prod, 'GET /api/admin/claims/{code}/redemptions');
+    expect(fnLogicalId.startsWith('AdminListClaimRedemptionsFn'), `redemptions route -> ${fnLogicalId}`).toBe(true);
+  });
+});

@@ -132,6 +132,13 @@ export function claimKey(code: string) {
   return { pk: `${CLAIM_PK_PREFIX}${code}`, sk: 'META' };
 }
 
+export const CLAIM_REDEMPTION_SK_PREFIX = 'REDEEM#';
+
+/** Redemptions live under their claim, so the sort key is the per-user gate. */
+export function claimRedemptionKey(code: string, user_id: string) {
+  return { pk: `${CLAIM_PK_PREFIX}${code}`, sk: `${CLAIM_REDEMPTION_SK_PREFIX}${user_id}` };
+}
+
 export const RATELIMIT_PK_PREFIX = 'RATELIMIT#';
 
 export function rateLimitKey(bucket: string, subject: string, windowStart: number) {

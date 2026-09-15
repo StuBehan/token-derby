@@ -250,11 +250,12 @@ export class TokenDerbyStack extends cdk.Stack {
 
     const adminCreateClaimFn = makeFn('AdminCreateClaimFn', 'admin-create-claim');
     const adminListClaimsFn = makeFn('AdminListClaimsFn', 'admin-list-claims');
+    const adminListClaimRedemptionsFn = makeFn('AdminListClaimRedemptionsFn', 'admin-list-claim-redemptions');
     const getClaimFn = makeFn('GetClaimFn', 'get-claim');
     const redeemClaimFn = makeFn('RedeemClaimFn', 'redeem-claim');
 
     const adminSsmArn = `arn:aws:ssm:${this.region}:${this.account}:parameter${config.ssmPrefix}/*`;
-    for (const fn of [adminLoginFn, adminListUsersFn, adminListOrgsFn, adminRenameUserFn, adminRenameHorseFn, adminRemoveHatFn, adminDeleteHorseFn, adminAnnounceReleaseFn, adminCreateClaimFn, adminListClaimsFn]) {
+    for (const fn of [adminLoginFn, adminListUsersFn, adminListOrgsFn, adminRenameUserFn, adminRenameHorseFn, adminRemoveHatFn, adminDeleteHorseFn, adminAnnounceReleaseFn, adminCreateClaimFn, adminListClaimsFn, adminListClaimRedemptionsFn]) {
       fn.addToRolePolicy(new cdk.aws_iam.PolicyStatement({
         actions: ['ssm:GetParameter'],
         resources: [adminSsmArn],
@@ -420,6 +421,7 @@ export class TokenDerbyStack extends cdk.Stack {
     httpApi.addRoutes({ path: '/api/admin/releases', methods: [HttpMethod.POST], integration: new HttpLambdaIntegration('AdminAnnounceReleaseInt', adminAnnounceReleaseFn) });
     httpApi.addRoutes({ path: '/api/admin/claims', methods: [HttpMethod.POST], integration: new HttpLambdaIntegration('AdminCreateClaimInt', adminCreateClaimFn) });
     httpApi.addRoutes({ path: '/api/admin/claims', methods: [HttpMethod.GET], integration: new HttpLambdaIntegration('AdminListClaimsInt', adminListClaimsFn) });
+    httpApi.addRoutes({ path: '/api/admin/claims/{code}/redemptions', methods: [HttpMethod.GET], integration: new HttpLambdaIntegration('AdminListClaimRedemptionsInt', adminListClaimRedemptionsFn) });
     httpApi.addRoutes({ path: '/api/claims/{code}', methods: [HttpMethod.GET], integration: new HttpLambdaIntegration('GetClaimInt', getClaimFn) });
     httpApi.addRoutes({ path: '/api/claims/{code}/redeem', methods: [HttpMethod.POST], integration: new HttpLambdaIntegration('RedeemClaimInt', redeemClaimFn) });
 

@@ -1,6 +1,6 @@
 import type {
   AdminOrgsResponse, AdminUsersResponse, AdminOrg,
-  AdminClaimsResponse, CreateClaimRequest, CreateClaimResponse,
+  AdminClaimsResponse, AdminClaimRedemptionsResponse, CreateClaimRequest, CreateClaimResponse,
 } from '@token-derby/shared';
 import { esc } from '../esc.js';
 import { renderUsersTable, type UsersTableMutations, type UsersTableHandle } from './users-table.js';
@@ -11,6 +11,7 @@ export type DashboardDeps = {
   fetchOrganisations: () => Promise<AdminOrgsResponse>;
   fetchClaims: () => Promise<AdminClaimsResponse>;
   createClaim: (body: CreateClaimRequest) => Promise<CreateClaimResponse>;
+  fetchRedemptions: (code: string) => Promise<AdminClaimRedemptionsResponse>;
   mutations: UsersTableMutations;
   onSignOut: () => void;
   onUnauthorized: () => void;
@@ -73,6 +74,7 @@ export function renderDashboard(root: HTMLElement, deps: DashboardDeps): void {
       renderClaims(root.querySelector<HTMLElement>('#claims-body')!, {
         fetchClaims: deps.fetchClaims,
         createClaim: deps.createClaim,
+        fetchRedemptions: deps.fetchRedemptions,
         onUnauthorized: () => { unauthorized({ status: 401 }); },
       });
     }

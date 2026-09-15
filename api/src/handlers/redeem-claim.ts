@@ -2,8 +2,8 @@ import type { ApiHandler } from '../lib/http.js';
 import type { RedeemClaimRequest, RedeemClaimResponse } from '@token-derby/shared';
 import { authenticate } from '../lib/auth.js';
 import { getStableHorse, appendStableHorseHat, awardHorseXp } from '../db/stable.js';
-import { markClaimRedeemed } from '../db/claims.js';
-import { lookupClaim, decideClaimOutcome } from '../lib/redeem-claim.js';
+import { redeemClaimSlot } from '../db/claims.js';
+import { lookupClaim, decidePackOutcome } from '../lib/redeem-claim.js';
 import { ok, err, parseJson } from '../lib/http.js';
 
 export const handler: ApiHandler = async (event) => {
@@ -25,22 +25,30 @@ export const handler: ApiHandler = async (event) => {
   const horse = await getStableHorse(auth.user_id, body.stable_horse_id);
   if (!horse) return err('STABLE_HORSE_NOT_FOUND', 'No such horse in your stable');
 
-  const decision = decideClaimOutcome(horse.hats ?? [], claim.hat_id, claim.variant, horse.xp);
+  const decision = decidePackOutcome(horse.hats ?? [], claim.entries, horse.xp);
   if (decision.result === 'unknown_hat') {
-    return err('BAD_REQUEST', 'This claim references a hat that no longer exists');
+    return err('BAD_REQUEST', 'This claim references a hat or hat variant that no longer exists');
   }
 
-  // The conditional stamp is the single-use gate; everything after it is the
-  // payout for the one caller that won.
-  const won = await markClaimRedeemed(claim.code, {
-    redeemed_by: auth.user_id,
-    redeemed_by_name: auth.display_name,
-    redeemed_horse_id: horse.stable_horse_id,
-    redeemed_horse_name: horse.name,
+  const slot = await redeemClaimSlot(claim, {
+    user_id: auth.user_id,
+    user_name: auth.display_name,
+    horse_id: horse.stable_horse_id,
+    horse_name: horse.name,
     outcome: decision.result,
+    hat_id: decision.result === 'hat' ? decision.collected.id : decision.hat_id,
+    variant: decision.result === 'hat' ? decision.collected.variant : decision.variant,
     xp_awarded: decision.result === 'duplicate' ? decision.xp_delta : undefined,
   });
-  if (!won) return err('CLAIM_ALREADY_REDEEMED', 'This claim token has already been used');
+  if (slot === 'already_redeemed') {
+    return err('CLAIM_ALREADY_REDEEMED', 'You have already used this claim token');
+  }
+  if (slot === 'exhausted') {
+    return err('CLAIM_EXHAUSTED', 'This claim token has been fully redeemed');
+  }
+  if (slot === 'conflict') {
+    return err('RATE_LIMITED', 'Too many people are redeeming this claim right now. Try again in a moment.');
+  }
 
   if (decision.result === 'hat') {
     const hat_index = await appendStableHorseHat(auth.user_id, horse.stable_horse_id, decision.collected);
@@ -56,10 +64,10 @@ export const handler: ApiHandler = async (event) => {
   await awardHorseXp(auth.user_id, horse.stable_horse_id, decision.xp_delta);
   const response: RedeemClaimResponse = {
     result: 'duplicate',
-    hat_id: claim.hat_id,
+    hat_id: decision.hat_id,
     xp_awarded: decision.xp_delta,
     new_xp: horse.xp + decision.xp_delta,
   };
-  if (claim.variant !== undefined) response.variant = claim.variant;
+  if (decision.variant !== undefined) response.variant = decision.variant;
   return ok(response);
 };

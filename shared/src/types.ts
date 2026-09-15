@@ -177,11 +177,13 @@ export type User = {
   hd?: string;            // Google hosted-domain claim; Workspace accounts only
 };
 
-export type HatRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type HatRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'limited';
 
 export type HatId = string;
 
-export type HatVariant = { A: string; Q?: string };
+// Five paint channels, A required. An explicit key list rather than an index
+// signature, so a sixth channel fails to compile instead of needing a rule.
+export type HatVariant = { A: string; Q?: string; C?: string; D?: string; F?: string };
 
 export type HatAnimation = { type: 'cycle'; frames: string[]; fps: number };
 
@@ -201,6 +203,27 @@ export type Hat =
       id: HatId;
       name: string;
       rarity: 'legendary';
+      width: number;
+      anchor_x: number;
+      rows: string[];
+      colors: HatVariant;
+      animation: HatAnimation;
+      rollable: boolean;
+    }
+  | {
+      id: HatId;
+      name: string;
+      rarity: 'limited';
+      width: number;
+      anchor_x: number;
+      rows: string[];
+      variants: HatVariant[];
+      rollable: boolean;
+    }
+  | {
+      id: HatId;
+      name: string;
+      rarity: 'limited';
       width: number;
       anchor_x: number;
       rows: string[];
