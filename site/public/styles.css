@@ -2554,6 +2554,17 @@ label.label input:disabled, label.label select:disabled, label.label textarea:di
   height: calc(var(--sprite-scale) * 32px);
 }
 
+/* Declared on body, a real element, rather than inside the body::after rule
+   below where they started. A custom property set on a pseudo-element is
+   visible to that pseudo-element and nothing else — and the bus is #app::after,
+   a different element's pseudo. It could not see --bridge-deck, so its
+   `bottom` was invalid at computed-value time and fell back to auto, which
+   pinned the bus to the top of the viewport instead of the roadway. On body
+   both pseudo-elements inherit them. */
+:root[data-theme="london"]:not(:has(.crowd)) body {
+  --city-h: 190px;
+  --bridge-deck: calc(var(--ticker-h) + var(--city-h) * 20 / 124);
+}
 :root[data-theme="london"]:not(:has(.crowd)) #app { position: relative; z-index: 1; }
 :root[data-theme="london"]:not(:has(.crowd)) body::after {
   content: '';
@@ -2563,8 +2574,6 @@ label.label input:disabled, label.label select:disabled, label.label textarea:di
   pointer-events: none;
   /* Same six layers as the crowd strip, one ticker-height up so the roadway
      runs along the top of the ticker rather than having its feet cut off. */
-  --city-h: 190px;
-  --bridge-deck: calc(var(--ticker-h) + var(--city-h) * 20 / 124);
   background-image:
     url('img/london-bridge.svg'),
     linear-gradient(180deg, rgba(150, 175, 205, 0) 45%, rgba(150, 175, 205, 0.12) 100%),
