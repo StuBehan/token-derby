@@ -1,5 +1,5 @@
 import type { Hat } from '@token-derby/shared';
-import { HATS, hatColors, isAnimatedHat } from '@token-derby/shared';
+import { HATS, hatColors, channelColor, isAnimatedHat } from '@token-derby/shared';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -28,14 +28,14 @@ export function buildHatGroup(doc: Document, hat: Hat, variantIdx: number): SVGG
     const row = hat.rows[i]!;
     for (let j = 0; j < row.length; j++) {
       const ch = row[j];
-      if (ch === '.') continue;
+      if (ch === '.' || ch === undefined) continue;
       const rect = doc.createElementNS(SVG_NS, 'rect');
       rect.setAttribute('x', String(hat.anchor_x + j));
       rect.setAttribute('y', String(i - ext));
       rect.setAttribute('width', '1');
       rect.setAttribute('height', '1');
-      rect.setAttribute('class', ch === 'A' ? 'hat-a' : 'hat-q');
-      rect.setAttribute('fill', ch === 'A' ? colors.A : (colors.Q ?? colors.A));
+      rect.setAttribute('class', `hat-${ch.toLowerCase()}`);
+      rect.setAttribute('fill', channelColor(colors, ch));
       g.appendChild(rect);
     }
   }

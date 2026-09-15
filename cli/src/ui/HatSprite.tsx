@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import type { Hat } from '@token-derby/shared';
-import { hatColors, isAnimatedHat } from '@token-derby/shared';
+import type { Hat, HatVariant } from '@token-derby/shared';
+import { hatColors, channelColor, isAnimatedHat } from '@token-derby/shared';
 import { hexGridToHalfBlocks } from './half-blocks.js';
 
 type Props = {
@@ -54,7 +54,7 @@ export function AnimatedHatSprite({ hat, variant, centerIn }: Props) {
 
 function makeHatGrid(
   hat: Hat,
-  colors: { A: string; Q?: string },
+  colors: HatVariant,
   centerIn: { w: number; h: number } | undefined,
 ): (string | null)[][] {
   const w = centerIn?.w ?? hat.width;
@@ -72,7 +72,7 @@ function makeHatGrid(
       const gx = x + offX;
       const gy = y + offY;
       if (gx < 0 || gx >= w || gy < 0 || gy >= h) continue;
-      grid[gy]![gx] = ch === 'A' ? colors.A : (colors.Q ?? colors.A);
+      grid[gy]![gx] = channelColor(colors, ch);
     }
   }
   return grid;

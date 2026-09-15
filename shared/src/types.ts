@@ -181,7 +181,9 @@ export type HatRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'limited';
 
 export type HatId = string;
 
-export type HatVariant = { A: string; Q?: string };
+// Five paint channels, A required. An explicit key list rather than an index
+// signature, so a sixth channel fails to compile instead of needing a rule.
+export type HatVariant = { A: string; Q?: string; C?: string; D?: string; F?: string };
 
 export type HatAnimation = { type: 'cycle'; frames: string[]; fps: number };
 

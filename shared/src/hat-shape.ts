@@ -20,3 +20,11 @@ export function hatColors(hat: Hat, variantIdx = 0): HatVariant {
   if (isAnimatedHat(hat)) return hat.colors;
   return hat.variants[variantIdx] ?? hat.variants[0]!;
 }
+
+/** Paint channels a hat row may use, in editor order. A is always present. */
+export const HAT_CHANNELS = ['A', 'Q', 'C', 'D', 'F'] as const;
+
+/** Colour for one row character. Anything undeclared falls back to A. */
+export function channelColor(colors: HatVariant, ch: string): string {
+  return (colors as Record<string, string | undefined>)[ch] ?? colors.A;
+}

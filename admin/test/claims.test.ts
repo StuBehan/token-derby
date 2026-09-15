@@ -288,10 +288,12 @@ describe('pack builder', () => {
   });
 
   it('skips an empty rarity rather than rendering a bare optgroup', () => {
-    // No limited hat exists in the catalog yet, so this pins that the
-    // renderer omits the group instead of showing a header with nothing under it.
+    // Drives the catalog down to commons, so every other rarity is empty and
+    // the renderer must omit those groups rather than show an empty header.
+    const spy = vi.spyOn(HATS, 'filter');
+    spy.mockImplementation((fn: any) => [COMMON].filter(fn));
     const labels = Array.from(mounted().querySelectorAll('optgroup')).map(g => g.getAttribute('label'));
-    expect(labels).not.toContain('limited');
+    expect(labels).toEqual(['common']);
   });
 
   it('renders the optgroup for a rarity once it has a hat', () => {

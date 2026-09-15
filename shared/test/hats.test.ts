@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { HATS, hatById } from '../src/hats.js';
-import { isAnimatedHat, variantCount } from '../src/hat-shape.js';
+import { isAnimatedHat, variantCount, HAT_CHANNELS } from '../src/hat-shape.js';
 import type { Hat } from '../src/types.js';
 
 describe('HATS catalog', () => {
-  it('contains exactly 40 hats', () => {
-    expect(HATS).toHaveLength(40);
+  it('contains exactly 46 hats', () => {
+    expect(HATS).toHaveLength(46);
   });
 
   it('has the expected rarity counts', () => {
     const counts = { common: 0, rare: 0, epic: 0, legendary: 0, limited: 0 };
     for (const h of HATS) counts[h.rarity]++;
-    expect(counts).toEqual({ common: 18, rare: 10, epic: 6, legendary: 6, limited: 0 });
+    expect(counts).toEqual({ common: 18, rare: 10, epic: 6, legendary: 6, limited: 6 });
   });
 
   it('every hat is 11×10 with width 11', () => {
@@ -62,7 +62,10 @@ describe('HATS catalog', () => {
   // this — when it does, also revisit the site EXCLUSIVE badge and the admin
   // (exclusive) label so both surfaces are checked against real data.
   it('pins exactly which hats are claim-only', () => {
-    expect(HATS.filter(h => !h.rollable).map(h => h.id)).toEqual(['contributor_cap']);
+    expect(HATS.filter(h => !h.rollable).map(h => h.id)).toEqual([
+      'contributor_cap',
+      'bearskin', 'roundel_cap', 'union_topper', 'crown_jewels', 'black_cab', 'london_bus',
+    ]);
   });
 
   it('the Contributor Cap is a claim-only animated legendary', () => {
@@ -103,5 +106,52 @@ describe('limited edition tier', () => {
     expect(isAnimatedHat(animated)).toBe(true);
     expect(isAnimatedHat(varianted)).toBe(false);
     expect(variantCount(varianted)).toBe(2);
+  });
+});
+
+describe('row characters resolve to a declared colour', () => {
+  const paletteOf = (h: Hat) => (isAnimatedHat(h) ? [h.colors] : h.variants);
+
+  it('uses only "." or a declared channel in every row', () => {
+    for (const hat of HATS) {
+      for (const row of hat.rows) {
+        for (const ch of row) {
+          if (ch === '.') continue;
+          expect(HAT_CHANNELS as readonly string[], `${hat.id} uses unknown channel '${ch}'`)
+            .toContain(ch);
+        }
+      }
+    }
+  });
+
+  it('declares every channel it paints with, in every variant', () => {
+    for (const hat of HATS) {
+      const used = new Set([...hat.rows.join('')].filter(c => c !== '.'));
+      for (const [i, palette] of paletteOf(hat).entries()) {
+        for (const ch of used) {
+          const c = (palette as Record<string, string | undefined>)[ch];
+          expect(c, `${hat.id} variant ${i} paints '${ch}' but declares no colour for it`)
+            .toMatch(/^#[0-9a-fA-F]{6}$/);
+        }
+      }
+    }
+  });
+});
+
+describe('limited edition roster', () => {
+  const limited = HATS.filter(h => h.rarity === 'limited');
+
+  it('is the London series, every one claim-only', () => {
+    expect(limited.map(h => h.id)).toEqual([
+      'bearskin', 'roundel_cap', 'union_topper', 'crown_jewels', 'black_cab', 'london_bus',
+    ]);
+    for (const h of limited) expect(h.rollable, `${h.id} must not be rollable`).toBe(false);
+  });
+
+  it('gives each one a single colourway, so a limited hat is one collectible', () => {
+    for (const h of limited) {
+      if (isAnimatedHat(h)) continue;
+      expect(h.variants.length, `${h.id} has ${h.variants.length} variants`).toBe(1);
+    }
   });
 });

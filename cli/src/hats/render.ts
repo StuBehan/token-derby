@@ -1,5 +1,5 @@
 import type { Hat, HorseColors } from '@token-derby/shared';
-import { hatColors } from '@token-derby/shared';
+import { hatColors, channelColor } from '@token-derby/shared';
 import { FIXED_COLORS, type SlotTag } from '../ui/sprite.js';
 
 export type HatGrid = {
@@ -63,7 +63,7 @@ export function composeHatGrid(
       if (ch === '.' || ch === undefined) continue;
       const gx = hat.anchor_x + x + horseOffsetX;
       if (gx < 0 || gx >= canvasW) continue;
-      const color = ch === 'A' ? colors.A : (colors.Q ?? colors.A);
+      const color = channelColor(colors, ch);
       grid[y]![gx] = color;
     }
   }
