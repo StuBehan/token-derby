@@ -26,8 +26,19 @@ export const THEMES: readonly Theme[] = [
 
 export const DEFAULT_THEME: ThemeId = 'derby';
 
+export type EventTheme = { id: ThemeId; tag: string };
+
+/** Runs a themed event: on the first load after `tag` changes, every browser is
+ *  flipped to `id` once, whatever it had saved, and the picker works normally
+ *  from then on. Set to null to end the event; bump the tag to run one again.
+ *  Mirrored by the pre-paint script in public/index.html — keep in sync. */
+export const EVENT_THEME: EventTheme | null = { id: 'london', tag: '2026-09-london' };
+
 /** Also read by the pre-paint inline script in public/index.html — keep in sync. */
 export const THEME_STORAGE_KEY = 'td_theme';
+
+/** Records the tag of the last event this browser was flipped by. */
+export const EVENT_STORAGE_KEY = 'td_theme_event';
 
 export function isThemeId(value: unknown): value is ThemeId {
   return typeof value === 'string' && THEMES.some((t) => t.id === value);
@@ -40,6 +51,21 @@ export function readTheme(): ThemeId {
   } catch {
     return DEFAULT_THEME; // storage blocked (private mode / cookies off)
   }
+}
+
+/** The theme for this page load, applying a pending event flip if there is one.
+ *  Unlike readTheme this writes: recording the tag is what makes the flip
+ *  one-shot, and writing the id is what lets the picker preselect it. */
+export function resolveTheme(event: EventTheme | null = EVENT_THEME): ThemeId {
+  if (!event) return readTheme();
+  try {
+    if (localStorage.getItem(EVENT_STORAGE_KEY) === event.tag) return readTheme();
+    localStorage.setItem(EVENT_STORAGE_KEY, event.tag);
+    localStorage.setItem(THEME_STORAGE_KEY, event.id);
+  } catch {
+    // Storage blocked: the event still shows, it just shows again every load.
+  }
+  return event.id;
 }
 
 export function applyTheme(id: ThemeId, doc: Document = document): void {
@@ -77,8 +103,11 @@ export function setTheme(id: ThemeId, doc: Document = document): void {
 /** index.html applies the stored theme pre-paint to avoid a flash of Derby; this
  *  covers entry points without that inline script (the preview pages) and keeps
  *  the attribute authoritative after bundle load. */
-export function initTheme(doc: Document = document): ThemeId {
-  const id = readTheme();
+export function initTheme(
+  doc: Document = document,
+  event: EventTheme | null = EVENT_THEME,
+): ThemeId {
+  const id = resolveTheme(event);
   applyTheme(id, doc);
   return id;
 }
