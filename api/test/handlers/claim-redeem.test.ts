@@ -86,11 +86,7 @@ describe('get-claim probe', () => {
   it('409s an already-redeemed claim', async () => {
     const user = await makeUser('Probe_Spent');
     const horse = await makeHorse(user, 'Gary');
-    // max_redemptions: 2 so this hits the per-user check, not exhaustion.
-    const claim = await putClaim({
-      code: generateClaimCode(), item_type: 'hat', entries: [{ hat_id: 'flat_cap', variant: 0 }],
-      max_redemptions: 2, expires_at: future(), created_by: 'admin',
-    });
+    const claim = await seedClaim();
     await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
     const res = await probe(ev(user, claim.code));
     expect(res.statusCode).toBe(409);
@@ -166,11 +162,7 @@ describe('redeem-claim', () => {
   it('refuses a second redemption', async () => {
     const user = await makeUser('Redeem_Twice');
     const horse = await makeHorse(user, 'Gary');
-    // max_redemptions: 2 so this hits the per-user check, not exhaustion.
-    const claim = await putClaim({
-      code: generateClaimCode(), item_type: 'hat', entries: [{ hat_id: 'flat_cap', variant: 0 }],
-      max_redemptions: 2, expires_at: future(), created_by: 'admin',
-    });
+    const claim = await seedClaim();
     expect((await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }))).statusCode).toBe(200);
     const second = await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
     expect(second.statusCode).toBe(409);
@@ -179,16 +171,18 @@ describe('redeem-claim', () => {
     expect(after?.hats).toHaveLength(1);
   });
 
-  it('exhausts a single-slot claim on the redeemer\'s own second attempt', async () => {
-    const user = await makeUser('Redeem_TwiceExhausted');
-    const horse = await makeHorse(user, 'Gary');
+  // Pins the check order in lookupClaim: the redeemer of a single-slot claim
+  // sees ALREADY_REDEEMED (above); anyone else sees EXHAUSTED.
+  it('exhausts a single-slot claim for a different user once it is spoken for', async () => {
+    const redeemer = await makeUser('Redeem_ExhaustRedeemer');
+    const other = await makeUser('Redeem_ExhaustOther');
+    const redeemerHorse = await makeHorse(redeemer, 'Gary');
+    const otherHorse = await makeHorse(other, 'Dot');
     const claim = await seedClaim();
-    expect((await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }))).statusCode).toBe(200);
-    const second = await redeem(ev(user, claim.code, { stable_horse_id: horse.stable_horse_id }));
-    expect(second.statusCode).toBe(409);
-    expect(body(second).code).toBe('CLAIM_EXHAUSTED');
-    const after = await getStableHorse(user.user_id, horse.stable_horse_id);
-    expect(after?.hats).toHaveLength(1);
+    expect((await redeem(ev(redeemer, claim.code, { stable_horse_id: redeemerHorse.stable_horse_id }))).statusCode).toBe(200);
+    const res = await redeem(ev(other, claim.code, { stable_horse_id: otherHorse.stable_horse_id }));
+    expect(res.statusCode).toBe(409);
+    expect(body(res).code).toBe('CLAIM_EXHAUSTED');
   });
 
   it('awards exactly once under concurrent redemption', async () => {
