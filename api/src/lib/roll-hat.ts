@@ -73,6 +73,7 @@ export const DUPLICATE_XP_FRACTION: Record<HatRarity, number> = {
   rare: 0.20,
   epic: 0.35,
   legendary: 0.50,
+  limited: 0.60,
 };
 
 /** XP fraction of `xp_for_level` awarded for the no_hat outcome. */

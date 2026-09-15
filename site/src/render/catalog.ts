@@ -14,7 +14,7 @@ const PALETTES: Record<string, Palette> = {
   appaloosa: { name: 'Roan',     body: '#7A5C4A', mane: '#3A2620', tail: '#3A2620', saddle: '#2D1810' },
 };
 
-const RARITY_ORDER: HatRarity[] = ['common', 'rare', 'epic', 'legendary'];
+const RARITY_ORDER: HatRarity[] = ['common', 'rare', 'epic', 'legendary', 'limited'];
 
 export function renderCatalog(root: HTMLElement): () => void {
   const doc = root.ownerDocument;

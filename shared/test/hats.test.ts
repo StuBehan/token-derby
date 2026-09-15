@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { HATS, hatById } from '../src/hats.js';
+import { isAnimatedHat, variantCount } from '../src/hat-shape.js';
+import type { Hat } from '../src/types.js';
 
 describe('HATS catalog', () => {
   it('contains exactly 40 hats', () => {
@@ -73,5 +75,33 @@ describe('HATS catalog', () => {
     // the logo merging into the crown mid-cycle.
     expect(hat!.animation.frames).not.toContain(hat!.colors.Q);
     expect(hat!.animation.frames.length).toBeGreaterThan(1);
+  });
+});
+
+describe('limited edition tier', () => {
+  it('is absent from the rollable pool', () => {
+    for (const hat of HATS.filter(h => h.rarity === 'limited')) {
+      expect(hat.rollable, `${hat.id} is limited but rollable`).toBe(false);
+    }
+  });
+
+  it('accepts either shape for a limited hat', () => {
+    // No limited hats ship yet; this asserts the union admits both forms.
+    const animated: Hat = {
+      id: 'le_animated', name: 'LE Animated', rarity: 'limited', width: 11, anchor_x: 23,
+      rows: Array(10).fill('...........'),
+      colors: { A: '#f472b6' },
+      animation: { type: 'cycle', frames: ['#f472b6', '#ec4899'], fps: 6 },
+      rollable: false,
+    };
+    const varianted: Hat = {
+      id: 'le_variants', name: 'LE Variants', rarity: 'limited', width: 11, anchor_x: 23,
+      rows: Array(10).fill('...........'),
+      variants: [{ A: '#f472b6' }, { A: '#ec4899' }],
+      rollable: false,
+    };
+    expect(isAnimatedHat(animated)).toBe(true);
+    expect(isAnimatedHat(varianted)).toBe(false);
+    expect(variantCount(varianted)).toBe(2);
   });
 });

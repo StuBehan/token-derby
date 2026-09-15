@@ -952,6 +952,7 @@ html, body {
   --rarity-rare: #60a5fa;
   --rarity-epic: #c084fc;
   --rarity-legendary: #fbbf24;
+  --rarity-limited: #f472b6;
 }
 
 .catalog {
@@ -1049,6 +1050,7 @@ html, body {
 .rarity-heading.rarity-rare .rarity-name      { color: var(--rarity-rare); }
 .rarity-heading.rarity-epic .rarity-name      { color: var(--rarity-epic); }
 .rarity-heading.rarity-legendary .rarity-name { color: var(--rarity-legendary); }
+.rarity-heading.rarity-limited .rarity-name { color: var(--rarity-limited); }
 .rarity-meta {
   color: var(--muted);
   font-size: 0.7rem;
@@ -1107,6 +1109,7 @@ html, body {
 .rarity-badge.rarity-rare      { background: var(--rarity-rare); }
 .rarity-badge.rarity-epic      { background: var(--rarity-epic); }
 .rarity-badge.rarity-legendary { background: var(--rarity-legendary); }
+.rarity-badge.rarity-limited { background: var(--rarity-limited); }
 
 .hat-exclusive {
   margin-left: 0.5rem;

@@ -10,7 +10,7 @@ export type ClaimsDeps = {
   onUnauthorized: () => void;
 };
 
-const RARITY_ORDER = ['common', 'rare', 'epic', 'legendary'] as const;
+const RARITY_ORDER = ['common', 'rare', 'epic', 'legendary', 'limited'] as const;
 
 function grouped(): string {
   return RARITY_ORDER.map(rarity => {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { rollHat } from '../../src/lib/roll-hat.js';
+import { readFileSync } from 'node:fs';
+import { rollHat, DUPLICATE_XP_FRACTION } from '../../src/lib/roll-hat.js';
 import { HATS } from '@token-derby/shared';
 import type { CollectedHat, Hat } from '@token-derby/shared';
 
@@ -119,5 +120,30 @@ describe('rollHat respects the rollable flag', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('limited edition is unreachable by rolling', () => {
+  it('never returns a limited hat across a full sweep of the RNG', () => {
+    for (let i = 0; i <= 1000; i++) {
+      const r = i / 1000;
+      const decision = rollHat([], seededRng([r, r, r]));
+      if (decision.result === 'no_hat') continue;
+      const id = decision.result === 'hat' ? decision.collected.id : decision.hat_id;
+      const hat = HATS.find(h => h.id === id);
+      expect(hat?.rarity, `roll at ${r} produced a limited hat`).not.toBe('limited');
+    }
+  });
+
+  it('has no limited entry in the tier weights', () => {
+    // A limited tier weight would make the tier reachable regardless of rollable.
+    const src = readFileSync(new URL('../../src/lib/roll-hat.ts', import.meta.url), 'utf8');
+    const weights = src.slice(src.indexOf('TIER_WEIGHTS'), src.indexOf('function pickTier'));
+    expect(weights).not.toContain('limited');
+  });
+
+  it('pays a higher duplicate fraction for limited than legendary', () => {
+    expect(DUPLICATE_XP_FRACTION.limited).toBe(0.60);
+    expect(DUPLICATE_XP_FRACTION.limited).toBeGreaterThan(DUPLICATE_XP_FRACTION.legendary);
   });
 });

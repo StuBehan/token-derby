@@ -16,6 +16,7 @@
     --rare: #42a5f5;
     --epic: #ab47bc;
     --legendary: #ffb300;
+    --limited: #f472b6;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -472,7 +473,7 @@ const STORAGE_KEY = 'tdHatEditor.v5';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HAT_WIDTH = 11;   // odd → exact horizontal midpoint at col 5
 const HAT_HEIGHT = 10;
-const RARITIES = ['common', 'rare', 'epic', 'legendary'];
+const RARITIES = ['common', 'rare', 'epic', 'legendary', 'limited'];
 
 // Migrate to current shape:
 //   1. Pad to 11×10 grid (legacy 7×N data)
@@ -490,8 +491,8 @@ function migrateHat(h) {
     for (const r of next.rows) newRows.push('.'.repeat(padLeft) + r + '.'.repeat(padRight));
     next = { ...next, width: HAT_WIDTH, anchor_x: (next.anchor_x ?? 25) - padLeft, rows: newRows };
   }
-  // Variant migration (legacy `colors` on non-legendary hats)
-  if (next.rarity !== 'legendary' && !Array.isArray(next.variants)) {
+  // Variant migration (legacy `colors` on non-animated hats)
+  if (!next.animation && !Array.isArray(next.variants)) {
     const { colors, animation, ...rest } = next;
     next = { ...rest, variants: [colors ? { A: colors.A, ...(colors.Q !== undefined ? { Q: colors.Q } : {}) } : { A: '#888888' }] };
   }

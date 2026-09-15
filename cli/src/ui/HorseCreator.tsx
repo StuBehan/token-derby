@@ -170,7 +170,10 @@ function renderHatLabel(
     ? ` #${collected.variant + 1}`
     : '';
   const rarityColor = hat
-    ? (hat.rarity === 'legendary' ? 'yellow' : hat.rarity === 'epic' ? 'magenta' : hat.rarity === 'rare' ? 'blue' : 'gray')
+    ? (hat.rarity === 'limited' ? 'magentaBright'
+        : hat.rarity === 'legendary' ? 'yellow'
+        : hat.rarity === 'epic' ? 'magenta'
+        : hat.rarity === 'rare' ? 'blue' : 'gray')
     : 'gray';
   const equippedMark = initialEquipped === hatChoice ? ' ✓' : '';
   return (
