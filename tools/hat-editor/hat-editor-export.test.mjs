@@ -28,10 +28,15 @@ const fmtVariantSrc = extractFunction(html, 'fmtVariant');
 const fmtHatLineSrc = extractFunction(html, 'fmtHatLine');
 const migrateHatSrc = extractFunction(html, 'migrateHat');
 
+// fmtVariant reads the editor's channel list, so pull that declaration
+// straight from index.html rather than restating it here.
+const channelsDecl = html.match(/^const CHANNELS = \[[^\]]*\];/m);
+if (!channelsDecl) throw new Error('could not find CHANNELS in index.html');
+
 // fmtHatLine calls fmtVariant for non-legendary hats, so evaluate both
 // declarations in one scope and hand back the one under test.
 const { fmtHatLine } = new Function(
-  `${fmtVariantSrc}\n${fmtHatLineSrc}\nreturn { fmtVariant, fmtHatLine };`
+  `${channelsDecl[0]}\n${fmtVariantSrc}\n${fmtHatLineSrc}\nreturn { fmtVariant, fmtHatLine };`
 )();
 
 // migrateHat references the grid/rarity constants it pads legacy hats
@@ -135,9 +140,9 @@ describe('ORIGINAL_HATS (editor catalog copy)', () => {
     }
   });
 
-  it("matches shared/src/hats.ts's count of 40", () => {
+  it("matches shared/src/hats.ts's count of 46", () => {
     const sharedHatCount = sharedHats.match(/^\s*\{ id: /gm)?.length ?? 0;
-    expect(sharedHatCount).toBe(40);
+    expect(sharedHatCount).toBe(46);
     expect(originalHats.length).toBe(sharedHatCount);
   });
 });
