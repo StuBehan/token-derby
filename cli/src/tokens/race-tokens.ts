@@ -4,6 +4,7 @@ import { sumCodexTokens, sumCodexByConversation } from './codex.js';
 import { sumGeminiTokens, sumGeminiByConversation } from './gemini.js';
 import type { ScanProgress } from './scan-progress.js';
 import { SourceRootMissing } from './source-root.js';
+import { logWarn } from '../log/logger.js';
 
 /** Per-source reading for one beat: the two secondary scalars + the primary, per conversation. */
 export type AllSources = {
@@ -38,11 +39,18 @@ export async function scanWithTimeout(
   const budget = new Promise<typeof TIMED_OUT>((resolve) => {
     timer = setTimeout(() => resolve(TIMED_OUT), timeoutMs);
   });
+  const startedAt = Date.now();
   try {
     const result = await Promise.race([scan(), budget]);
-    if (result !== TIMED_OUT) return result;
+    if (result !== TIMED_OUT) {
+      // Only abnormal beats are logged; the loop already records every beat's duration.
+      if (isStall(result)) logWarn('scan.stall', { reason: result.stall, ms: Date.now() - startedAt });
+      return result;
+    }
     const detail = describeTimeout ? await describeTimeout() : null;
-    return { stall: detail ?? `Token scan timed out after ${Math.round(timeoutMs / 1000)}s` };
+    const stall = detail ?? `Token scan timed out after ${Math.round(timeoutMs / 1000)}s`;
+    logWarn('scan.timeout', { budget_ms: timeoutMs, reason: stall });
+    return { stall };
   } finally {
     clearTimeout(timer); // never let the budget timer outlive the beat
   }
