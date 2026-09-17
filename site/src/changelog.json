@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.15.2",
+    "date": "2026-09-17",
+    "component": "site",
+    "changes": [
+      "TV-mode auto-scroll pauses while you scroll the track yourself, then carries on from where you left it"
+    ]
+  },
+  {
     "version": "3.1.2",
     "date": "2026-09-17",
     "component": "cli",
