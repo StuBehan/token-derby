@@ -4,7 +4,7 @@ import { sumCodexTokens, sumCodexByConversation } from './codex.js';
 import { sumGeminiTokens, sumGeminiByConversation } from './gemini.js';
 import type { ScanProgress } from './scan-progress.js';
 import { SourceRootMissing } from './source-root.js';
-import { logWarn } from '../log/logger.js';
+import { logWarn, logError } from '../log/logger.js';
 
 /** Per-source reading for one beat: the two secondary scalars + the primary, per conversation. */
 export type AllSources = {
@@ -51,6 +51,15 @@ export async function scanWithTimeout(
     const stall = detail ?? `Token scan timed out after ${Math.round(timeoutMs / 1000)}s`;
     logWarn('scan.timeout', { budget_ms: timeoutMs, reason: stall });
     return { stall };
+  } catch (err) {
+    // The caller turns this into a stall reading, which would otherwise leave the
+    // log showing a healthy beat while the racer sees a failure on screen.
+    logError('scan.error', {
+      message: (err as Error)?.message ?? String(err),
+      stack: (err as Error)?.stack,
+      ms: Date.now() - startedAt,
+    });
+    throw err;
   } finally {
     clearTimeout(timer); // never let the budget timer outlive the beat
   }
@@ -99,7 +108,15 @@ export async function readAllSources(
     progress?.begin(k);
     return SCALAR_READERS[k]()
       .then(t => scoreFor(race, t))
-      .catch(() => 0)
+      .catch((err) => {
+        // An absent root is the normal case — few machines have all three tools —
+        // so only a real read error earns a line, or a missing source would write
+        // one every beat and bury the failures that matter.
+        if (!(err instanceof SourceRootMissing)) {
+          logWarn('scan.source.err', { source: k, message: err?.message ?? String(err) });
+        }
+        return 0;
+      })
       .finally(() => progress?.end(k));
   });
 

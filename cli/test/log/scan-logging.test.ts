@@ -53,3 +53,20 @@ describe('token scan logging', () => {
     expect(readLog()).not.toContain('scan.');
   });
 });
+
+describe('token scan failure logging', () => {
+  // A throw escapes scanWithTimeout and is turned into a stall reading by
+  // run-race.tsx. Without a line here the log shows a healthy beat.prepare.done
+  // while the racer is looking at "Token scan failed" on screen.
+  it('records a scan that threw, and still lets the error through', async () => {
+    const boom = new Error('EACCES: permission denied, open transcript.jsonl');
+
+    await expect(
+      scanWithTimeout(async () => { throw boom; }, 1_000),
+    ).rejects.toThrow('EACCES');
+
+    const text = readLog();
+    expect(text).toContain('ERROR scan.error');
+    expect(text).toContain('EACCES');
+  });
+});
