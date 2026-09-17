@@ -38,3 +38,11 @@ export function codexSessionsDir(): string {
 export function geminiTmpDir(): string {
   return process.env.TOKEN_DERBY_GEMINI_DIR ?? path.join(os.homedir(), '.gemini', 'tmp');
 }
+
+export function logDir(): string {
+  return path.join(homeDir(), 'logs');
+}
+
+export function logFile(): string {
+  return path.join(logDir(), 'token-derby.log');
+}

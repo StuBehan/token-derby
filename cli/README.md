@@ -97,6 +97,35 @@ at usage you didn't produce.
 
 - `~/.token-derby/stable.json` — saved horses
 - `~/.token-derby/active-races/<join-code>.json` — per-race state for rejoin
+- `~/.token-derby/logs/token-derby.log` — debug log (see below)
+
+## Debug log
+
+Every command appends to a rolling log, so a race that stalls overnight can be
+diagnosed afterwards. The race UI takes over the terminal, which is exactly when
+nothing can be printed to the screen.
+
+```bash
+token-derby logs             # print the path of the log file
+token-derby logs --tail 100  # print the last 100 lines (default 50)
+```
+
+The log rolls at 2MB and keeps five files (`token-derby.log` plus `.1`–`.4`), so
+it never exceeds ~10MB. Each environment has its own, next to that environment's
+identity.
+
+What the lines mean when a race misbehaves:
+
+- `beat.prepare.start` with no `beat.prepare.done` after it — the token scan
+  hung, and the poller is still waiting on it.
+- repeated `beat.send.err` with a climbing `next_ms` — the heartbeat is
+  reaching the network and failing; `retry` counts the attempts.
+- `scan.timeout` — the scan blew its budget; `reason` names the source that was
+  still running.
+
+Credentials are never written: identity and horse tokens, request headers and
+bodies are all omitted, and claim tokens and admin codes are masked out of the
+URLs they travel in.
 
 ## Environment
 

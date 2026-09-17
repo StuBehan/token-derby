@@ -16,8 +16,11 @@ import { claimCommand } from './commands/claim.js';
 import { orgJoinCommand } from './commands/org-join.js';
 import { webCommand } from './commands/web.js';
 import { envCommand } from './commands/env.js';
+import { logsCommand } from './commands/logs.js';
 import { CLI_VERSION } from './version.js';
 import { loadIdentity } from './identity/identity.js';
+import { logInfo, logError } from './log/logger.js';
+import { selectedEnv } from './env/env.js';
 
 const HELP = `token-derby v${CLI_VERSION}
 
@@ -46,6 +49,8 @@ Identity:
 
 Maintenance:
   token-derby update                      Check for and install the latest CLI version
+  token-derby logs                        Show the path of the debug log
+  token-derby logs --tail [n]             Print the last n log lines (default 50)
 
 Stable management:
   token-derby stable create               Make a new horse (interactive)
@@ -83,9 +88,30 @@ Environment:
   TOKEN_DERBY_HOME                        Hard-override identity/stable directory
 `;
 
+// Positional arguments carry join codes, admin codes and claim tokens, so only
+// the command, its subcommand where that is a fixed word, and flag NAMES are
+// logged — never a value.
+function describeInvocation(argv: string[]): Record<string, unknown> {
+  const cmd = argv[0] ?? '(none)';
+  const container = cmd === 'stable' || cmd === 'organisation' || cmd === 'org';
+  return {
+    cmd,
+    sub: container ? argv[1] : undefined,
+    flags: argv.filter(a => a.startsWith('--')).map(a => a.split('=')[0]),
+  };
+}
+
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
+
+  logInfo('cmd.start', {
+    ...describeInvocation(argv),
+    version: CLI_VERSION,
+    node: process.version,
+    pid: process.pid,
+    env: selectedEnv(),
+  });
 
   if (!cmd || cmd === '--help' || cmd === '-h') { console.log(HELP); return 0; }
   if (cmd === '--version' || cmd === '-v') { console.log(CLI_VERSION); return 0; }
@@ -103,6 +129,9 @@ async function main(): Promise<number> {
   // `env` runs before the identity gate: switching to a fresh env is exactly
   // when no identity exists there yet.
   if (cmd === 'env') return envCommand(argv[1]);
+  // `logs` runs before the identity gate too — a broken or unauthenticated
+  // install is exactly when the log is worth reading.
+  if (cmd === 'logs') return logsCommand(argv.slice(1));
 
   // Every other command requires an identity. `init`, `update`, and `env` are the only escape hatches.
   const identity = await loadIdentity();
@@ -157,9 +186,38 @@ function parseFlag(args: string[], flag: string): string | undefined {
   return undefined;
 }
 
+// A crash that escapes main() still gets a line — these are exactly the runs
+// worth reading the log for afterwards. Tagging the process keeps a second load
+// of this module from installing (and so firing) a duplicate set.
+const CRASH_HANDLERS_INSTALLED = Symbol.for('token-derby.crash-handlers');
+if (!(CRASH_HANDLERS_INSTALLED in process)) {
+  (process as unknown as Record<symbol, boolean>)[CRASH_HANDLERS_INSTALLED] = true;
+  process.on('uncaughtException', (err: Error) => {
+    logError('cmd.uncaught', { message: err?.message ?? String(err), stack: err?.stack });
+    console.error(err?.stack ?? err);
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (reason: unknown) => {
+    logError('cmd.unhandled', {
+      message: (reason as Error)?.message ?? String(reason),
+      stack: (reason as Error)?.stack,
+    });
+  });
+}
+
+const startedAt = Date.now();
+
 main().then(
-  code => process.exit(code),
+  code => {
+    logInfo('cmd.exit', { code, ms: Date.now() - startedAt });
+    process.exit(code);
+  },
   err => {
+    logError('cmd.crash', {
+      message: err?.message ?? String(err),
+      stack: err?.stack,
+      ms: Date.now() - startedAt,
+    });
     console.error(err?.stack ?? err);
     process.exit(1);
   },
