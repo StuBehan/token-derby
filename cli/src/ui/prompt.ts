@@ -1,10 +1,20 @@
-export async function promptYesNo(question: string): Promise<boolean> {
-  resetStdinAfterInk();
+export type PromptYesNoOptions = {
+  /** What a bare Enter means. Defaults to yes, matching the `[Y/n]` callers. */
+  defaultYes?: boolean;
+  input?: NodeJS.ReadableStream;
+  output?: NodeJS.WritableStream;
+};
+
+export async function promptYesNo(question: string, opts: PromptYesNoOptions = {}): Promise<boolean> {
+  const input = opts.input ?? process.stdin;
+  const output = opts.output ?? process.stdout;
+  if (input === process.stdin) resetStdinAfterInk();
   const readline = await import('node:readline/promises');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline.createInterface({ input, output });
   const a = (await rl.question(question)).trim().toLowerCase();
   rl.close();
-  return a === '' || a === 'y' || a === 'yes';
+  if (a === '') return opts.defaultYes !== false;
+  return a === 'y' || a === 'yes';
 }
 
 /**

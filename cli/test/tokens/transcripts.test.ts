@@ -160,3 +160,43 @@ describe('sumTokensByConversation', () => {
     await expect(sumTokensByConversation()).rejects.toThrow();
   });
 });
+
+describe('sumTokens — resilience of the directory walk', () => {
+  it('counts transcripts despite a broken symlink beside them', async () => {
+    // A dangling link — a removed worktree, a moved repo, a cleaned temp dir —
+    // used to abort the whole walk, and the empty result read as "0 tokens".
+    const root = await tmpProjects();
+    const proj = path.join(root, 'proj1');
+    await fs.mkdir(proj, { recursive: true });
+    await fs.writeFile(path.join(proj, 'a.jsonl'), line(5000, 100) + '\n');
+    await fs.symlink(path.join(os.tmpdir(), 'td-gone-' + Math.random()), path.join(proj, 'node_modules'));
+    const t = await sumTokens();
+    expect(t.output).toBe(5000);
+  });
+
+  it('still descends through a symlink that points at a real directory', async () => {
+    const root = await tmpProjects();
+    const proj = path.join(root, 'proj1');
+    const real = path.join(root, 'proj1', 'real-nested');
+    await fs.mkdir(real, { recursive: true });
+    await fs.writeFile(path.join(real, 'deep.jsonl'), line(700) + '\n');
+    await fs.symlink(real, path.join(proj, 'linked'));
+    const t = await sumTokens();
+    expect(t.output).toBe(1400); // once through the real dir, once through the link
+  });
+
+  it('skips a project entry that vanishes mid-scan rather than abandoning the scan', async () => {
+    const root = await tmpProjects();
+    const good = path.join(root, 'proj-good');
+    await fs.mkdir(good, { recursive: true });
+    await fs.writeFile(path.join(good, 'a.jsonl'), line(250) + '\n');
+    await fs.symlink(path.join(os.tmpdir(), 'td-gone-' + Math.random()), path.join(root, 'proj-dangling'));
+    const t = await sumTokens();
+    expect(t.output).toBe(250);
+  });
+
+  it('still throws when the projects root itself is missing', async () => {
+    process.env.TOKEN_DERBY_CLAUDE_DIR = path.join(os.tmpdir(), 'td-tx-none-' + Math.random());
+    await expect(sumTokens()).rejects.toThrow();
+  });
+});

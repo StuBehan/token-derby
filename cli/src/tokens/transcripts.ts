@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import { claudeProjectsDir } from '../paths.js';
 import { mapWithConcurrency, SCAN_CONCURRENCY } from './pool.js';
 import { ScanCache, type FileFold } from './scan-cache.js';
+import { readRoot } from './source-root.js';
 
 // `input` here is "fresh-input" tokens only: input_tokens (this turn's new
 // content) + cache_creation_input_tokens (tokens written into the cache this
@@ -68,31 +69,51 @@ export async function sumTokens(): Promise<TokenTotals> {
   return { input, output };
 }
 
-async function listJsonlFiles(root: string): Promise<string[]> {
-  const projects = await fs.readdir(root); // throws (e.g. ENOENT) — caller treats as "no reading"
+/** Every transcript file under a projects root. Throws if the root itself is absent. */
+export async function listJsonlFiles(root: string): Promise<string[]> {
+  const entries = await readEntries(root, true); // root is fail-loud — caller treats as "no reading"
   const out: string[] = [];
-  for (const project of projects) {
-    const projectDir = path.join(root, project);
-    const stat = await fs.stat(projectDir);
-    if (!stat.isDirectory()) continue;
-    await collectJsonl(projectDir, MAX_PROJECT_DEPTH, out);
+  for (const entry of entries) {
+    if (!(await isDirectory(entry, root))) continue;
+    await collectJsonl(path.join(root, entry.name), MAX_PROJECT_DEPTH, out);
   }
   return out;
 }
 
-/** Recursively collect .jsonl files up to `depth` levels below `dir`. */
+/**
+ * Recursively collect .jsonl files up to `depth` levels below `dir`.
+ *
+ * Everything below the root is best-effort: a dangling symlink, or an entry
+ * deleted between the readdir and the stat, skips that entry alone. Aborting the
+ * whole walk would surface as an empty result, which the race cannot tell apart
+ * from "this player produced nothing" — one dead link would silently score 0.
+ */
 async function collectJsonl(dir: string, depth: number, out: string[]): Promise<void> {
   if (depth <= 0) return;
-  const entries = await fs.readdir(dir);
-  for (const entry of entries) {
-    if (entry.endsWith('.jsonl')) {
-      out.push(path.join(dir, entry));
-    } else if (depth > 1) {
-      const child = path.join(dir, entry);
-      const st = await fs.stat(child);
-      if (st.isDirectory()) await collectJsonl(child, depth - 1, out);
+  for (const entry of await readEntries(dir, false)) {
+    if (entry.name.endsWith('.jsonl')) {
+      out.push(path.join(dir, entry.name));
+    } else if (depth > 1 && await isDirectory(entry, dir)) {
+      await collectJsonl(path.join(dir, entry.name), depth - 1, out);
     }
   }
+}
+
+/** Directory entries. `failLoud` reserves throwing for the root the caller must have. */
+async function readEntries(dir: string, failLoud: boolean): Promise<import('node:fs').Dirent[]> {
+  if (failLoud) return readRoot(dir, () => fs.readdir(dir, { withFileTypes: true }));
+  return fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+}
+
+/**
+ * Whether an entry is a directory to descend into. Plain directories are settled
+ * by the Dirent alone; only a symlink costs a stat, and one that resolves nowhere
+ * is simply not a directory.
+ */
+async function isDirectory(entry: import('node:fs').Dirent, parent: string): Promise<boolean> {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  return fs.stat(path.join(parent, entry.name)).then(st => st.isDirectory()).catch(() => false);
 }
 
 function addNum(value: unknown): number {

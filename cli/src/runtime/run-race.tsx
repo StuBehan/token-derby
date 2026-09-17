@@ -8,6 +8,7 @@ import { readAllSources, isStall, scanWithTimeout, type BeatReading } from '../t
 import { ScanProgress, diagnoseScanTimeout } from '../tokens/scan-progress.js';
 import { type ModelKey } from '@token-derby/shared';
 import { RaceScoreTracker, type RaceScoreState } from '../tokens/race-score.js';
+import { sourceDir } from '../tokens/source-probe.js';
 import * as endpoints from '../api/endpoints.js';
 import { ApiError } from '../api/client.js';
 import { saveActiveRace, type ActiveRace } from '../stable/active-race.js';
@@ -35,6 +36,7 @@ export function RunRace({ active, initialState, pendingMode, ownUserName }: RunR
   const ctrl = useRef(new AbortController());
   const [stalled, setStalled] = useState(false);
   const [stallReason, setStallReason] = useState<string | null>(null);
+  const [primarySilent, setPrimarySilent] = useState(false);
 
   // Re-render every second so the "Ns ago" counter updates.
   useEffect(() => {
@@ -73,6 +75,7 @@ export function RunRace({ active, initialState, pendingMode, ownUserName }: RunR
         if (pendingRef.current && !isStall(reading)) tracker.reprime();
         setStalled(tracker.stalled);
         setStallReason(tracker.stalled ? tracker.stallReason : null);
+        setPrimarySilent(tracker.primarySilent);
         return tracker.nextBeat();
       },
       sendBeat: async (snapshot) => {
@@ -145,6 +148,8 @@ export function RunRace({ active, initialState, pendingMode, ownUserName }: RunR
         lastHeartbeatOk={lastHbOk}
         stalled={stalled}
         stallReason={stallReason}
+        primarySilent={primarySilent}
+        primarySourceDir={sourceDir(active.primary_model)}
         primaryModel={active.primary_model}
       />
       {achievements.length > 0 && (

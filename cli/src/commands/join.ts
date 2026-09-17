@@ -9,6 +9,8 @@ import { ApiError } from '../api/client.js';
 import { saveActiveRace, type ActiveRace } from '../stable/active-race.js';
 import { RunRace, buildInitialState } from '../runtime/run-race.js';
 import { loadIdentity } from '../identity/identity.js';
+import { probeSource, confirmEmptySource } from '../tokens/source-probe.js';
+import { promptYesNo } from '../ui/prompt.js';
 
 /** Parse `--primary <model>` or `--primary=<model>` from argv. Throws on a bad value. */
 export function parsePrimaryFlag(argv: string[]): ModelKey | null {
@@ -119,6 +121,19 @@ export async function joinCommand(joinCode: string | undefined, argv: string[] =
     if (primaryFlag) chosenPrimary = primaryFlag;
     else if (process.stdout.isTTY) chosenPrimary = await pickPrimary();
     // else: leave as 'claude' (non-interactive default)
+  }
+
+  // A resuming horse keeps the primary it was locked to at its first join.
+  const effectivePrimary = ownHorse?.primary_model ?? chosenPrimary;
+  const proceed = await confirmEmptySource({
+    probe: await probeSource(effectivePrimary),
+    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    warn: (text) => console.error(`\n${text}\n`),
+    ask: () => promptYesNo('Join anyway? [y/N] ', { defaultYes: false }),
+  });
+  if (!proceed) {
+    console.log('Cancelled.');
+    return 1;
   }
 
   let joinResp;

@@ -103,4 +103,9 @@ at usage you didn't produce.
 - `TOKEN_DERBY_API_BASE` — override the API base URL (default: `https://token-derby.mauricode.co.uk/api`)
 - `TOKEN_DERBY_HOME` — override the data directory (default: `~/.token-derby`)
 - `TOKEN_DERBY_CLAUDE_DIR` — override the transcripts directory (default: `~/.claude/projects`)
+- `CLAUDE_CONFIG_DIR` — Claude Code's own config override. When set, transcripts are read from `$CLAUDE_CONFIG_DIR/projects`. `TOKEN_DERBY_CLAUDE_DIR` still wins.
+
+Token Derby counts usage from this machine's filesystem only. If Claude Code runs
+in a container, over SSH, or on another machine, join the race from there — `join`
+warns before entering a race whose primary model has no transcripts to read.
 - **Top-5 conversations (primary):** a race can be created so that only each racer's **5 most-active conversations per heartbeat** count toward their **primary** model's score (secondaries unaffected). The race creator opts in at `token-derby create` (prompt) or, for organisation-scheduled races, via the "Primary top-5 cap" option on the schedule tab of `token-derby web`. Off by default (every conversation counts).

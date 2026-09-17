@@ -4,6 +4,7 @@ import { codexSessionsDir } from '../paths.js';
 import type { TokenTotals } from './transcripts.js';
 import { mapWithConcurrency, SCAN_CONCURRENCY } from './pool.js';
 import { ScanCache, type FileFold } from './scan-cache.js';
+import { readRoot } from './source-root.js';
 
 // Counts real tokens the Codex CLI produced — same honesty rules as
 // tokens/transcripts.ts. Codex stores one rollout JSONL per session under
@@ -20,11 +21,8 @@ function num(v: unknown): number {
 
 export async function sumCodexByConversation(): Promise<Map<string, TokenTotals>> {
   const root = codexSessionsDir();
-  await fs.stat(root); // throws ENOENT if the Codex home is absent → fail-loud (matches Claude/Gemini)
-  const files = [
-    ...(await collectRollouts(path.join(root, 'sessions'))),
-    ...(await collectRollouts(path.join(root, 'archived_sessions'))),
-  ];
+  await readRoot(root, () => fs.stat(root)); // absent Codex home → SourceRootMissing (matches Claude/Gemini)
+  const files = await listCodexRollouts(root);
   const cache = await ScanCache.open('codex');
   const totals = await mapWithConcurrency(files, SCAN_CONCURRENCY, f =>
     cache.readIncremental(f, CODEX_FOLD).catch(() => ({ input: 0, output: 0 })),
@@ -41,6 +39,14 @@ export async function sumCodexTokens(): Promise<TokenTotals> {
   let output = 0;
   for (const t of byConv.values()) { input += t.input; output += t.output; }
   return { input, output };
+}
+
+/** Every rollout file under a Codex home, live and archived. Missing subtree → []. */
+export async function listCodexRollouts(root: string): Promise<string[]> {
+  return [
+    ...(await collectRollouts(path.join(root, 'sessions'))),
+    ...(await collectRollouts(path.join(root, 'archived_sessions'))),
+  ];
 }
 
 /** Recursively find rollout-*.jsonl files. Missing dir → []. */

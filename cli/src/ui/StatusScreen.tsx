@@ -4,6 +4,7 @@ import type { GetRaceResponse, HorseColors, HorseView } from '@token-derby/share
 import { levelInfo, MODEL_KEYS, resolveStaminaConfig, scoredOf, SECONDARY_WEIGHT, type ModelKey } from '@token-derby/shared';
 import { HorseSprite } from './HorseSprite.js';
 import { MINI_SPRITE } from './sprite.js';
+import { PRIMARY_SILENT_THRESHOLD } from '../config.js';
 
 const MODEL_LABELS: Record<ModelKey, string> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' };
 
@@ -36,11 +37,13 @@ type Props = {
   lastHeartbeatOk: boolean;
   stalled?: boolean;
   stallReason?: string | null;
+  primarySilent?: boolean;
+  primarySourceDir?: string;
   primaryModel?: ModelKey;
 };
 
 export function StatusScreen(props: Props) {
-  const { race, ownHorseId, ownHorseName, ownColors, ownUserName, lastHeartbeatAgoSec, lastHeartbeatOk, stalled, stallReason, primaryModel } = props;
+  const { race, ownHorseId, ownHorseName, ownColors, ownUserName, lastHeartbeatAgoSec, lastHeartbeatOk, stalled, stallReason, primarySilent, primarySourceDir, primaryModel } = props;
 
   if (!race) {
     return (
@@ -115,6 +118,14 @@ export function StatusScreen(props: Props) {
         <StatLines rows={rows} />
         {stalled && (
           <Text color="yellow">⚠ {stallReason ?? "Can't read token usage"}. Your race continues.</Text>
+        )}
+        {/* A stall names a more specific cause, so it wins the one warning slot. */}
+        {!stalled && primarySilent && (
+          <Text color="yellow">
+            ⚠ No {MODEL_LABELS[primaryModel ?? 'claude']} transcripts in {PRIMARY_SILENT_THRESHOLD} beats
+            {primarySourceDir ? ` — nothing under ${primarySourceDir}` : ''}. Your race continues,
+            but your horse cannot move until they can be read.
+          </Text>
         )}
       </Box>
 

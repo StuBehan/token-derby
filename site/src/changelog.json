@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.1.0",
+    "date": "2026-09-15",
+    "component": "cli",
+    "changes": [
+      "claim hats from admin provided packs",
+      "london onsite themed limited edition hats"
+    ]
+  },
+  {
+    "version": "0.15.1",
+    "date": "2026-09-15",
+    "component": "site",
+    "changes": [
+      "added rain to london theme (adefreitas)",
+      "London theme temporarily set as default"
+    ]
+  },
+  {
+    "version": "0.15.0",
+    "date": "2026-09-14",
+    "component": "site",
+    "changes": [
+      "london skyline onsite theme (adefreitas)"
+    ]
+  },
+  {
     "version": "0.14.0",
     "date": "2026-08-25",
     "component": "site",

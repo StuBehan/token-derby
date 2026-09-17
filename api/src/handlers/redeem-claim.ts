@@ -5,8 +5,16 @@ import { getStableHorse, appendStableHorseHat, awardHorseXp } from '../db/stable
 import { redeemClaimSlot } from '../db/claims.js';
 import { lookupClaim, decidePackOutcome } from '../lib/redeem-claim.js';
 import { ok, err, parseJson } from '../lib/http.js';
+import { readCliVersion, meetsMinimumCliVersion, versionMismatchMessage } from '../lib/version.js';
 
 export const handler: ApiHandler = async (event) => {
+  // The CLI bundles the hat catalog, so a stale CLI cannot name a newer hat.
+  // Gate before anything else, so a rejected call never consumes a slot.
+  const caller_version = readCliVersion(event);
+  if (!caller_version || !meetsMinimumCliVersion(caller_version)) {
+    return err('VERSION_MISMATCH', versionMismatchMessage());
+  }
+
   const auth = await authenticate(event);
   if ('error' in auth) return err('UNAUTHENTICATED', auth.error);
 

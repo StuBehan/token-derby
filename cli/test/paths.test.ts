@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { homeDir, identityFile } from '../src/paths.js';
+import { homeDir, identityFile, claudeProjectsDir } from '../src/paths.js';
 import { setSelectedEnv } from '../src/env/env.js';
 import { deleteIdentity } from '../src/identity/identity.js';
 
@@ -64,5 +64,37 @@ describe('prod-token safety', () => {
     expect(fsSync.existsSync(path.join(stagingDir, 'identity.json'))).toBe(false);
     expect(fsSync.existsSync(prodIdentity)).toBe(true);
     expect(fsSync.readFileSync(prodIdentity, 'utf8')).toContain('PROD_SECRET');
+  });
+});
+
+describe('claudeProjectsDir precedence', () => {
+  beforeEach(() => {
+    delete process.env.TOKEN_DERBY_CLAUDE_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+  });
+
+  afterEach(() => {
+    delete process.env.TOKEN_DERBY_CLAUDE_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+  });
+
+  it('defaults to ~/.claude/projects when nothing is set', () => {
+    expect(claudeProjectsDir()).toBe(path.join(os.homedir(), '.claude', 'projects'));
+  });
+
+  it('follows CLAUDE_CONFIG_DIR, which relocates the whole Claude Code config', () => {
+    process.env.CLAUDE_CONFIG_DIR = '/relocated/claude';
+    expect(claudeProjectsDir()).toBe(path.join('/relocated/claude', 'projects'));
+  });
+
+  it('TOKEN_DERBY_CLAUDE_DIR hard-overrides CLAUDE_CONFIG_DIR', () => {
+    process.env.CLAUDE_CONFIG_DIR = '/relocated/claude';
+    process.env.TOKEN_DERBY_CLAUDE_DIR = '/explicit/projects';
+    expect(claudeProjectsDir()).toBe('/explicit/projects');
+  });
+
+  it('ignores an empty CLAUDE_CONFIG_DIR rather than reading the filesystem root', () => {
+    process.env.CLAUDE_CONFIG_DIR = '';
+    expect(claudeProjectsDir()).toBe(path.join(os.homedir(), '.claude', 'projects'));
   });
 });

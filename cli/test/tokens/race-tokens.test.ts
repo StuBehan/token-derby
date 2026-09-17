@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { scoreFor, readAllSources, type AllSources } from '../../src/tokens/race-tokens.js';
+import { SourceRootMissing } from '../../src/tokens/source-root.js';
 import { ScanProgress } from '../../src/tokens/scan-progress.js';
 
 vi.mock('../../src/tokens/transcripts.js', async (orig) => ({
@@ -104,9 +105,7 @@ describe('readAllSources', () => {
   it('a PRIMARY with a missing home dir (ENOENT) reads as empty — never a stall', async () => {
     // The user's real bug: primary = a CLI they've never run, so its home dir is
     // absent. That must count as "0 tokens", not freeze the whole race.
-    vi.mocked(sumGeminiByConversation).mockRejectedValue(
-      Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' }),
-    );
+    vi.mocked(sumGeminiByConversation).mockRejectedValue(new SourceRootMissing('/home/u/.gemini/tmp'));
     vi.mocked(sumTokens).mockResolvedValue({ input: 4, output: 40 });
     vi.mocked(sumCodexTokens).mockResolvedValue({ input: 7, output: 70 });
     const res = await readAllSources({}, 'gemini');
@@ -115,5 +114,29 @@ describe('readAllSources', () => {
     expect(ok.primaryByConv.size).toBe(0); // gemini has no data → empty
     expect(ok.secondary.claude).toBe(40);  // secondaries keep counting normally
     expect(ok.secondary.codex).toBe(70);
+  });
+});
+
+describe('readAllSources — an unreadable primary must never pass as zero', () => {
+  it('stalls on an ENOENT from INSIDE the tree instead of reading as empty', async () => {
+    // A dangling symlink deep under the projects root. Before, this shared the
+    // missing-root escape hatch and silently scored 0 for the whole race.
+    vi.mocked(sumTokensByConversation).mockRejectedValue(
+      Object.assign(new Error("ENOENT: no such file or directory, stat '/p/proj/node_modules'"), { code: 'ENOENT' }),
+    );
+    vi.mocked(sumCodexTokens).mockResolvedValue({ input: 0, output: 0 });
+    vi.mocked(sumGeminiTokens).mockResolvedValue({ input: 0, output: 0 });
+    const res = await readAllSources({}, 'claude');
+    expect(res).toHaveProperty('stall');
+    expect((res as { stall: string }).stall).toContain('node_modules');
+  });
+
+  it('reads as empty only when the root itself is absent', async () => {
+    vi.mocked(sumTokensByConversation).mockRejectedValue(new SourceRootMissing('/home/u/.claude/projects'));
+    vi.mocked(sumCodexTokens).mockResolvedValue({ input: 0, output: 0 });
+    vi.mocked(sumGeminiTokens).mockResolvedValue({ input: 0, output: 0 });
+    const res = await readAllSources({}, 'claude');
+    expect(res).not.toHaveProperty('stall');
+    expect(ok(res).primaryByConv.size).toBe(0);
   });
 });

@@ -21,8 +21,14 @@ export function activeRacesDir(): string {
   return path.join(homeDir(), 'active-races');
 }
 
+// CLAUDE_CONFIG_DIR relocates Claude Code's whole config, transcripts included.
+// Honouring it keeps a relocated install countable instead of silently scoring 0.
 export function claudeProjectsDir(): string {
-  return process.env.TOKEN_DERBY_CLAUDE_DIR ?? path.join(os.homedir(), '.claude', 'projects');
+  const override = process.env.TOKEN_DERBY_CLAUDE_DIR;
+  if (override) return override;
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  if (configDir) return path.join(configDir, 'projects');
+  return path.join(os.homedir(), '.claude', 'projects');
 }
 
 export function codexSessionsDir(): string {

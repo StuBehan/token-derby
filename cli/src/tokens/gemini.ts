@@ -4,6 +4,7 @@ import { geminiTmpDir } from '../paths.js';
 import type { TokenTotals } from './transcripts.js';
 import { mapWithConcurrency, SCAN_CONCURRENCY } from './pool.js';
 import { ScanCache } from './scan-cache.js';
+import { readRoot } from './source-root.js';
 
 // Counts real tokens the Gemini CLI produced — same honesty rules as
 // tokens/transcripts.ts. Sessions live at
@@ -38,8 +39,9 @@ export async function sumGeminiTokens(): Promise<TokenTotals> {
   return { input, output };
 }
 
-async function listChatFiles(root: string): Promise<string[]> {
-  const entries = await fs.readdir(root); // throws ENOENT if the Gemini root is absent → fail-loud
+/** Every chat file under a Gemini tmp root. Throws (e.g. ENOENT) if the root is absent. */
+export async function listChatFiles(root: string): Promise<string[]> {
+  const entries = await readRoot(root, () => fs.readdir(root)); // absent root → SourceRootMissing
   const out: string[] = [];
   for (const entry of entries) {
     const chatsDir = path.join(root, entry, 'chats');

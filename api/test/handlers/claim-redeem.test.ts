@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { makeUser, makeHorse, type TestUser } from '../helpers/auth-helper.js';
-import { CURRENT_CLI_VERSION } from '../helpers/cli-version.js';
+import { CURRENT_CLI_VERSION, OUTDATED_CLI_VERSION } from '../helpers/cli-version.js';
 import { putClaim, getClaim, getClaimRedemption, redeemClaimSlot } from '../../src/db/claims.js';
 import { generateClaimCode } from '../../src/lib/claim-code.js';
 import { formatClaimCode } from '@token-derby/shared';
@@ -26,6 +26,13 @@ function ev(user: TestUser | null, code: string, payload?: unknown): APIGatewayP
     pathParameters: { code },
     body: payload === undefined ? undefined : JSON.stringify(payload),
   } as unknown as APIGatewayProxyEventV2;
+}
+
+function evAtVersion(user: TestUser, code: string, version: string | null, payload?: unknown): APIGatewayProxyEventV2 {
+  const e = ev(user, code, payload) as any;
+  if (version === null) delete e.headers['x-cli-version'];
+  else e.headers['x-cli-version'] = version;
+  return e as APIGatewayProxyEventV2;
 }
 
 function future(days = 30) { return new Date(Date.now() + days * 86_400_000).toISOString(); }
@@ -353,5 +360,45 @@ describe('claim lookup rate limit', () => {
       expect(res.statusCode).toBe(404);
     }
     expect((await probe(ev(user, generateClaimCode()))).statusCode).toBe(429);
+  });
+});
+
+
+describe('claim endpoints gate on CLI version', () => {
+  // The CLI bundles the hat catalog at build time, so a CLI older than a hat's
+  // release cannot name it. Without this gate a stale CLI burns a redemption
+  // slot and then prints "catalog mismatch" to the player.
+  it('probe rejects an outdated CLI', async () => {
+    const user = await makeUser('Gate_Outdated');
+    const claim = await seedClaim();
+    const res = await probe(evAtVersion(user, claim.code, OUTDATED_CLI_VERSION));
+    expect(body(res).code).toBe('VERSION_MISMATCH');
+  });
+
+  it('probe rejects a request with no CLI version at all', async () => {
+    const user = await makeUser('Gate_NoHeader');
+    const claim = await seedClaim();
+    const res = await probe(evAtVersion(user, claim.code, null));
+    expect(body(res).code).toBe('VERSION_MISMATCH');
+  });
+
+  it('redeem rejects an outdated CLI WITHOUT consuming a slot', async () => {
+    const user = await makeUser('Gate_NoSlot');
+    const horse = await makeHorse(user, 'Gatekeeper');
+    const claim = await seedClaim();
+    const res = await redeem(evAtVersion(user, claim.code, OUTDATED_CLI_VERSION, { stable_horse_id: horse.stable_horse_id }));
+    expect(body(res).code).toBe('VERSION_MISMATCH');
+    // The slot is the thing that must survive a rejected call.
+    expect((await getClaim(claim.code))?.redeemed_count).toBe(0);
+    expect(await getClaimRedemption(claim.code, user.user_id)).toBeNull();
+  });
+
+  it('still admits a current CLI', async () => {
+    const user = await makeUser('Gate_Current');
+    const horse = await makeHorse(user, 'Uptodate');
+    const claim = await seedClaim();
+    expect((await probe(evAtVersion(user, claim.code, CURRENT_CLI_VERSION))).statusCode).toBe(200);
+    const res = await redeem(evAtVersion(user, claim.code, CURRENT_CLI_VERSION, { stable_horse_id: horse.stable_horse_id }));
+    expect(res.statusCode).toBe(200);
   });
 });

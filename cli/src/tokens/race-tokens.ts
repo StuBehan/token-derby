@@ -3,6 +3,7 @@ import { sumTokens, sumTokensByConversation, type TokenTotals } from './transcri
 import { sumCodexTokens, sumCodexByConversation } from './codex.js';
 import { sumGeminiTokens, sumGeminiByConversation } from './gemini.js';
 import type { ScanProgress } from './scan-progress.js';
+import { SourceRootMissing } from './source-root.js';
 
 /** Per-source reading for one beat: the two secondary scalars + the primary, per conversation. */
 export type AllSources = {
@@ -67,10 +68,10 @@ export function scoreFor(race: { counts_input?: boolean }, t: TokenTotals): numb
 /**
  * Read all sources for a beat. The PRIMARY source is read per-conversation and is
  * the critical path — a genuine read failure stalls the whole beat and reports its
- * cause. The one exception is a MISSING home dir (ENOENT): choosing a primary CLI
- * you've never run means it has simply produced 0 tokens, so it reads as empty and
- * must NOT freeze the race. The two secondary sources are scalar and resilient: a
- * failure of any kind contributes 0.
+ * cause. The one exception is a MISSING ROOT (SourceRootMissing): choosing a primary
+ * CLI you've never run means it has simply produced 0 tokens, so it reads as empty
+ * and must NOT freeze the race. The two secondary sources are scalar and resilient:
+ * a failure of any kind contributes 0.
  */
 export async function readAllSources(
   race: { counts_input?: boolean },
@@ -102,9 +103,11 @@ export async function readAllSources(
   const primaryByConv = new Map<string, number>();
   if (primaryResult.ok) {
     for (const [id, totals] of primaryResult.map) primaryByConv.set(id, scoreFor(race, totals));
-  } else if (primaryResult.err?.code !== 'ENOENT') {
-    // Absent home dir → treat as empty (0), never a stall. Any other error is a
-    // real read failure → stall, and carry the cause so the UI can show it.
+  } else if (!(primaryResult.err instanceof SourceRootMissing)) {
+    // An ABSENT ROOT → treat as empty (0), never a stall. Every other failure is
+    // a real read error → stall, carrying the cause so the UI can show it. The
+    // distinction matters: a bare ENOENT can come from a dangling symlink deep in
+    // the tree, and swallowing that scores 0 for the whole race without a word.
     const err = primaryResult.err;
     return { stall: `Can't read ${primary} token usage: ${err?.message ?? String(err)}` };
   }

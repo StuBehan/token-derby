@@ -15,3 +15,8 @@ export const HEARTBEAT_INTERVAL_MS = 60_000;
 // next one starts. Derived from the interval so the two can't drift apart.
 export const SCAN_TIMEOUT_MS = HEARTBEAT_INTERVAL_MS * 0.75;
 export const HEARTBEAT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000];
+
+// Consecutive beats whose primary scan finds NO conversations before the status
+// panel says so. A missing or misplaced history directory reads as "produced 0
+// tokens" rather than as an error, so nothing else would ever surface it.
+export const PRIMARY_SILENT_THRESHOLD = 10;

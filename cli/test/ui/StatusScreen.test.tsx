@@ -97,3 +97,52 @@ describe('StatusScreen division lines', () => {
     expect(league).toMatch(/Last heartbeat: {6}12s ago/);
   });
 });
+
+function screenWith(props: Record<string, unknown>) {
+  const { lastFrame } = render(
+    <StatusScreen
+      race={race()}
+      ownHorseId="b"
+      ownHorseName="Beta"
+      ownColors={COLORS}
+      ownUserName="BetaOwner"
+      lastHeartbeatAgoSec={12}
+      lastHeartbeatOk
+      {...props}
+    />,
+  );
+  return lastFrame() ?? '';
+}
+
+describe('primary source silence warning', () => {
+  it('is absent while the primary source is producing conversations', () => {
+    expect(screenWith({ primaryModel: 'claude' })).not.toMatch(/No Claude transcripts/i);
+  });
+
+  it('names the source and the directory it could not read', () => {
+    const frame = screenWith({
+      primaryModel: 'claude',
+      primarySilent: true,
+      primarySourceDir: '/home/y/.claude/projects',
+    });
+    expect(frame).toMatch(/No Claude transcripts/i);
+    expect(frame).toContain('/home/y/.claude/projects');
+  });
+
+  it('reassures the player the race is still running', () => {
+    const frame = screenWith({ primarySilent: true, primarySourceDir: '/p', primaryModel: 'claude' });
+    expect(frame).toMatch(/race continues/i);
+  });
+
+  it('yields to a stall, which names a more specific cause', () => {
+    const frame = screenWith({
+      primaryModel: 'claude',
+      primarySilent: true,
+      primarySourceDir: '/p',
+      stalled: true,
+      stallReason: 'Token scan timed out after 45s',
+    });
+    expect(frame).toContain('Token scan timed out after 45s');
+    expect(frame).not.toMatch(/No Claude transcripts/i);
+  });
+});

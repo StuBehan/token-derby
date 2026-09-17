@@ -6,6 +6,7 @@
 import { MODEL_KEYS, type ModelKey } from '@token-derby/shared';
 import { isStall, type BeatReading } from './race-tokens.js';
 import { primaryConversationCap } from './primary-cap.js';
+import { PRIMARY_SILENT_THRESHOLD } from '../config.js';
 
 export type PerSource<T> = Record<ModelKey, T>;
 
@@ -39,6 +40,7 @@ export class RaceScoreTracker {
   private seq: number;
   private stalls = 0;
   private lastStall: string | null = null;
+  private primaryEmptyBeats = 0;
   private readonly primary: ModelKey;
   private readonly primaryTop5: boolean;
 
@@ -73,6 +75,10 @@ export class RaceScoreTracker {
       const v = reading.secondary[key];
       if (v > 0) this.lastGood[key] = v;
     }
+    // No conversations at all means the source's history is unreadable, not that
+    // the player is idle — an idle player still HAS conversations, they just stop
+    // growing. Only the former is worth a warning.
+    this.primaryEmptyBeats = reading.primaryByConv.size === 0 ? this.primaryEmptyBeats + 1 : 0;
     // Per-conversation monotonic floor (a conv never moves down). This replaces
     // the old aggregate never-anchor-down floor; the two coincide under the
     // monotonic cumulative reads the CLIs produce in normal use. (Flag off →
@@ -135,6 +141,11 @@ export class RaceScoreTracker {
 
   get stalled(): boolean {
     return this.stalls >= STALL_THRESHOLD;
+  }
+
+  /** The primary source has produced no conversations for long enough to be worth saying. */
+  get primarySilent(): boolean {
+    return this.primaryEmptyBeats >= PRIMARY_SILENT_THRESHOLD;
   }
 
   /** Human-readable cause of the most recent stall (null once a good read recovers). */

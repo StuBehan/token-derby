@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { RaceScoreTracker, type RaceScoreState } from '../../src/tokens/race-score.js';
+import { PRIMARY_SILENT_THRESHOLD } from '../../src/config.js';
 import type { AllSources } from '../../src/tokens/race-tokens.js';
 
 // Primary = claude in these tests. secondary holds codex/gemini scalars.
@@ -117,5 +118,45 @@ describe('RaceScoreTracker — primary top-N + forfeit', () => {
     expect(s.primaryConvAcked).toEqual({ a: 100 });
     expect(s.primaryCounted).toBe(100);
     expect(s.seq).toBe(3);
+  });
+});
+
+describe('RaceScoreTracker — primary source silence', () => {
+  it('is not silent before the threshold is reached', () => {
+    const t = new RaceScoreTracker(baseState(), 'claude', false);
+    for (let i = 0; i < PRIMARY_SILENT_THRESHOLD - 1; i++) t.recordReading(reading({}));
+    expect(t.primarySilent).toBe(false);
+  });
+
+  it('reports silence once the primary yields no conversations for the whole threshold', () => {
+    const t = new RaceScoreTracker(baseState(), 'claude', false);
+    for (let i = 0; i < PRIMARY_SILENT_THRESHOLD; i++) t.recordReading(reading({}));
+    expect(t.primarySilent).toBe(true);
+  });
+
+  it('does not flag an idle player, whose conversations exist but are not growing', () => {
+    const t = new RaceScoreTracker(baseState(), 'claude', false);
+    for (let i = 0; i < PRIMARY_SILENT_THRESHOLD * 2; i++) t.recordReading(reading({ a: 100 }));
+    expect(t.primarySilent).toBe(false);
+    expect(t.nextBeat().components.claude).toBe(100); // still a real, countable conversation
+  });
+
+  it('clears the silence as soon as a conversation reappears', () => {
+    const t = new RaceScoreTracker(baseState(), 'claude', false);
+    for (let i = 0; i < PRIMARY_SILENT_THRESHOLD; i++) t.recordReading(reading({}));
+    t.recordReading(reading({ a: 5 }));
+    expect(t.primarySilent).toBe(false);
+  });
+
+  it('does not count a stalled beat as silence — a stall reports its own cause', () => {
+    const t = new RaceScoreTracker(baseState(), 'claude', false);
+    for (let i = 0; i < PRIMARY_SILENT_THRESHOLD * 2; i++) t.recordReading({ stall: 'timed out' });
+    expect(t.primarySilent).toBe(false);
+  });
+
+  it('only considers the primary — busy secondaries do not mask a silent primary', () => {
+    const t = new RaceScoreTracker(baseState(), 'claude', false);
+    for (let i = 0; i < PRIMARY_SILENT_THRESHOLD; i++) t.recordReading(reading({}, 1000 * i, 0));
+    expect(t.primarySilent).toBe(true);
   });
 });
